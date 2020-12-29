@@ -17,6 +17,10 @@ AddOption('--asan',
           action='store_true',
           help='turn on ASAN')
 
+AddOption('--clazy',
+          action='store_true',
+          help='build with clazy')
+
 real_arch = arch = subprocess.check_output(["uname", "-m"], encoding='utf8').rstrip()
 if platform.system() == "Darwin":
   arch = "Darwin"
@@ -71,7 +75,6 @@ if arch == "aarch64" or arch == "larch64":
     if QCOM_REPLAY:
       cflags += ["-DQCOM_REPLAY"]
       cxxflags += ["-DQCOM_REPLAY"]
-
 else:
   cflags = []
   cxxflags = []
@@ -89,10 +92,12 @@ else:
       "#cereal",
       "#selfdrive/common",
       "/usr/local/lib",
+      "/usr/local/opt/openssl/lib",
       "/System/Library/Frameworks/OpenGL.framework/Libraries",
     ]
     cflags += ["-DGL_SILENCE_DEPRECATION"]
     cxxflags += ["-DGL_SILENCE_DEPRECATION"]
+    cpppath += ["/usr/local/opt/openssl/include"]
   else:
     libpath = [
       "#phonelibs/snpe/x86_64-linux-clang",
@@ -239,6 +244,64 @@ else:
 
 Export('envCython')
 
+# Qt build environment
+qt_env = None
+if arch in ["x86_64", "Darwin", "larch64"]:
+  qt_env = env.Clone()
+
+  qt_modules = ["Widgets", "Gui", "Core", "DBus", "Multimedia", "Network"]
+
+  qt_libs = []
+  if arch == "Darwin":
+    qt_env['QTDIR'] = "/usr/local/opt/qt"
+    QT_BASE = "/usr/local/opt/qt/"
+    qt_dirs = [
+      QT_BASE + "include/",
+    ]
+    qt_dirs += [f"{QT_BASE}include/Qt{m}" for m in qt_modules]
+    qt_env["LINKFLAGS"] += ["-F" + QT_BASE + "lib"]
+    qt_env["FRAMEWORKS"] += [f"Qt{m}" for m in qt_modules] + ["OpenGL"]
+  else:
+    qt_env['QTDIR'] = "/usr"
+    qt_dirs = [
+      f"/usr/include/{real_arch}-linux-gnu/qt5",
+      f"/usr/include/{real_arch}-linux-gnu/qt5/QtGui/5.5.1/QtGui",
+      f"/usr/include/{real_arch}-linux-gnu/qt5/QtGui/5.12.8/QtGui",
+    ]
+    qt_dirs += [f"/usr/include/{real_arch}-linux-gnu/qt5/Qt{m}" for m in qt_modules]
+
+    qt_libs = [f"Qt5{m}" for m in qt_modules]
+    if arch == "larch64":
+      qt_libs += ["GLESv2", "wayland-client"]
+    elif arch != "Darwin":
+      qt_libs += ["GL"]
+
+  qt_env.Tool('qt')
+  qt_env['CPPPATH'] += qt_dirs + ["#selfdrive/ui/qt/"]
+  qt_flags = [
+    "-D_REENTRANT",
+    "-DQT_NO_DEBUG",
+    "-DQT_WIDGETS_LIB",
+    "-DQT_GUI_LIB",
+    "-DQT_CORE_LIB"
+  ]
+  qt_env['CXXFLAGS'] += qt_flags
+  qt_env['LIBPATH'] += ['#selfdrive/ui']
+  qt_env['LIBS'] = qt_libs
+
+  if GetOption("clazy"):
+    checks = [
+      "level0",
+      "level1",
+      "no-range-loop",
+      "no-non-pod-global-static",
+    ]
+    qt_env['CXX'] = 'clazy'
+    qt_env['ENV']['CLAZY_IGNORE_DIRS'] = qt_dirs[0]
+    qt_env['ENV']['CLAZY_CHECKS'] = ','.join(checks)
+Export('qt_env')
+
+
 # still needed for apks
 zmq = 'zmq'
 Export('env', 'arch', 'real_arch', 'zmq', 'SHARED', 'USE_WEBCAM', 'QCOM_REPLAY')
@@ -265,12 +328,17 @@ else:
 
 Export('common', 'visionipc', 'gpucommon')
 
+
+# Build openpilot
+
+SConscript(['cereal/SConscript'])
 SConscript(['opendbc/can/SConscript'])
+
+SConscript(['phonelibs/SConscript'])
 
 SConscript(['common/SConscript'])
 SConscript(['common/kalman/SConscript'])
 SConscript(['common/transformations/SConscript'])
-SConscript(['phonelibs/SConscript'])
 
 SConscript(['selfdrive/camerad/SConscript'])
 SConscript(['selfdrive/modeld/SConscript'])
@@ -294,6 +362,6 @@ SConscript(['selfdrive/ui/SConscript'])
 if arch != "Darwin":
   SConscript(['selfdrive/logcatd/SConscript'])
 
-if arch == "x86_64":
+if real_arch == "x86_64":
+  SConscript(['tools/nui/SConscript'])
   SConscript(['tools/lib/index_log/SConscript'])
-
