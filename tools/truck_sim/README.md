@@ -29,6 +29,8 @@ Setting screen capture framerate to 20 FPS seems to work pretty smoothly, and so
 
 OP seems to turn too early a lot of the times, this is probably due to truck sim's camera perspective being in the back, which makes the truck steer out of lane, this could perhaps be fixed by adjusting the viewing perspective (I don't know how to move the camera forward or back) in truck sim, or tweaking OP somehow. 
 
+Sometimes, OP would fail to read from the ONNX model for some unknown reason, in this case just restart either bridge.py or OP until it works. When OP fails to read, you'll see the modeld text in the log turn red.
+
 ## Future Improvements
 
 Right now OP doesn't quite work as expected in truck sim, especially on curves, OP would constantly swerve out of lane. This is likely due to the unusual viewing perspective (frame) from truck sim that's confusing OP. Perhaps some sort of offset or extra calibration (the normal calibration doesn't help) would improve this.
