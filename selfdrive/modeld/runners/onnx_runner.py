@@ -43,6 +43,11 @@ if __name__ == "__main__":
     options = ort.SessionOptions()
     options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
     provider = 'OpenVINOExecutionProvider'
+  elif 'CUDAExecutionProvider' in ort.get_available_providers() and 'ONNXCPU' not in os.environ:
+    print("OnnxJit is using CUDA")
+    options = ort.SessionOptions()
+    options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
+    provider = 'CUDAExecutionProvider'
   else:
     print("OnnxJit is using CPU", file=sys.stderr)
     options = ort.SessionOptions()

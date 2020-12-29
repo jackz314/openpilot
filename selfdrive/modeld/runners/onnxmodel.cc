@@ -12,6 +12,8 @@
 #include "common/swaglog.h"
 #include <cassert>
 
+#include <errno.h>
+
 
 ONNXModel::ONNXModel(const char *path, float *_output, size_t _output_size, int runtime) {
   output = _output;
@@ -56,9 +58,14 @@ ONNXModel::~ONNXModel() {
 void ONNXModel::pwrite(float *buf, int size) {
   char *cbuf = (char *)buf;
   int tw = size*sizeof(float);
+  char buffer[ 256 ];
   while (tw > 0) {
     int err = write(pipein[1], cbuf, tw);
     //printf("host write %d\n", err);
+    if(err < 0){
+      char * errorMsg = strerror_r( errno, buffer, 256 ); // GNU-specific version, Linux default
+      printf("pwrite error: %s\n", errorMsg); //return value has to be used since buffer might not be modified
+    }
     assert(err >= 0);
     cbuf += err;
     tw -= err;

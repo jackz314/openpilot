@@ -1,0 +1,3 @@
+Import('env', 'cereal', 'messaging')
+
+env.Program('nvfbc_cap', ['nvfbc_cap.cc'], LIBS=[cereal, messaging, 'zmq', 'capnp', 'kj', 'dl', 'X11'])
