@@ -328,7 +328,7 @@ int main(int argc, char *argv[])
     createCaptureParams.eCaptureType  = NVFBC_CAPTURE_SHARED_CUDA;
     createCaptureParams.bWithCursor   = NVFBC_TRUE;
     createCaptureParams.frameSize     = frameSize; // scale
-//    createCaptureParams.captureBox    = captureBox; // crop
+    createCaptureParams.captureBox    = captureBox; // crop
     createCaptureParams.eTrackingType = trackingType;
 
     if (trackingType == NVFBC_TRACKING_OUTPUT) {

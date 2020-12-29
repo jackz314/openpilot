@@ -291,6 +291,10 @@ See the full [README](tools/sim/README.md)
 You should also take a look at the tools directory in master: lots of tools you can use to replay driving data, test, and develop openpilot from your PC.
 
 
+Testing on Euro Truck Simulator 2 / American Truck Simulator
+------
+See the full [README](tools/truck_sim/README.md)
+
 Community and Contributing
 ------
 
