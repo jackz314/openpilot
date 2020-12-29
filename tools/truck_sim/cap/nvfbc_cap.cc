@@ -483,7 +483,7 @@ int main(int argc, char *argv[])
          * Compute how much time to sleep before capturing the next frame.
          */
         t_delta = t2_total - t1_total;
-        wait_time_ms = t_delta < 17 ? 17 - t_delta : 0;
+        wait_time_ms = t_delta < 50 ? 50 - t_delta : 0;
         // printf(", now sleeping for %llu ms\n",
         //        (unsigned long long) wait_time_ms);
         if(wait_time_ms > 0){

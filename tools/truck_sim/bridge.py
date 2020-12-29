@@ -277,7 +277,7 @@ def go(q):
 
             throttle_out = throttle_op * 65536
             steer_out = steer_op * (32768/180)
-            brake_out = brake_op
+            brake_out = brake_op * 65536
 
             steer_out = steer_rate_limit(old_steer, steer_out)
             old_steer = steer_out
@@ -333,8 +333,8 @@ def go(q):
 
         throttle = throttle_out / 0.6
         steer = steer_truck
-        # brake = brake_out * 0.6
-        brake = 0
+        brake = brake_out
+        # brake = 0
         # print(throttle, steer, brake)
         joy.emit(steer, throttle, brake)
         # --------------Step 3-------------------------------
@@ -390,6 +390,7 @@ if __name__ == "__main__":
         try:
             # print('alphanumeric key {0} pressed'.format(key.char))
             if key.char == 'c': op_plus() # press 'c' to increase OP speed
+            elif key.char == 'z': op_minus() # press 'z' to decrease OP speed
             elif key.char == 'v': op_cancel() # press 'v' to cancel OP
         except AttributeError:
             pass
@@ -400,6 +401,9 @@ if __name__ == "__main__":
         print("OP++")
         q.put(str("cruise_up"))
 
+    def op_minus():
+        print("OP--")
+        q.put(str("cruise_down"))
 
     def op_cancel():
         print("OP Cancel")

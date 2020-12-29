@@ -19,7 +19,15 @@ I've also included integration with Euro Truck Simulator 2 / American Truck Simu
 
 ## Controls
 
-OP sends control signals back to truck sim with a virtual joystick found in [joystick.py](joystick.py), you may need to tweak control settings in truck sim to make it work (should all be inverted). After starting the bridge, you can control OP by pressing "C" to engage and increase cruise speed, and press "V" to cancel OP and disengage.
+OP sends control signals back to truck sim with a virtual joystick found in [joystick.py](joystick.py), you may need to tweak control settings in truck sim to make it work (should all be inverted). After starting the bridge, you can control OP by pressing "C" to engage and increase cruise speed, press "Z" to decrease cruise speed, and press "V" to cancel OP and disengage.
+
+## Notes
+
+I have found that in truck sim, viewing perspectives 6 and 7 work the best, 1 and 2 also kinda work but they are worse than 6 & 7. 
+
+Setting screen capture framerate to 20 FPS seems to work pretty smoothly, and sometimes performs better than higher framerates, so I'd start there and tweak if needed. 
+
+OP seems to turn too early a lot of the times, this is probably due to truck sim's camera perspective being in the back, which makes the truck steer out of lane, this could perhaps be fixed by adjusting the viewing perspective (I don't know how to move the camera forward or back) in truck sim, or tweaking OP somehow. 
 
 ## Future Improvements
 
