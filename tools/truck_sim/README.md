@@ -31,6 +31,8 @@ Setting screen capture framerate to 20 FPS seems to work pretty smoothly, and so
 
 OP works pretty nicely now in truck sim, but occasionally it still under or over steer when the turn is too tight, to improve this, you can tweak the steering ratio and the max steering angle. Dial them down if OP is under-steering (turns are too wide), and push them up if OP is over-steering (turns are too tight). 
 
+Sometimes, OP would fail to read from the ONNX model for some unknown reason, in this case just restart either bridge.py or OP until it works. When OP fails to read, you'll see the modeld text in the log turn red.
+
 ## Future Improvements
 
 Better tweaks for steering ratio and max steering angle.
