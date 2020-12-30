@@ -193,7 +193,13 @@ class Controls:
           self.events.add(EventName.preLaneChangeRight)
     elif self.sm['pathPlan'].laneChangeState in [LaneChangeState.laneChangeStarting,
                                                  LaneChangeState.laneChangeFinishing]:
-      self.events.add(EventName.laneChange)
+      direction = self.sm['pathPlan'].laneChangeDirection
+      if direction == LaneChangeDirection.left:
+        self.events.add(EventName.laneChangeLeft)
+        print("changing lane to the left")
+      else:
+        self.events.add(EventName.laneChangeRight)
+        print("changing lane to the right")
 
     if not SIMULATION:
       if self.can_rcv_error or (not CS.canValid and self.sm.frame > 5 / DT_CTRL):

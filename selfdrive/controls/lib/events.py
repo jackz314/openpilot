@@ -452,6 +452,22 @@ EVENTS: Dict[int, Dict[str, Union[Alert, Callable[[Any, messaging.SubMaster, boo
       Priority.LOW, VisualAlert.steerRequired, AudibleAlert.none, .0, .1, .1),
   },
 
+  EventName.laneChangeLeft: {
+    ET.WARNING: Alert(
+      "Changing Lane to the Left",
+      "Monitor Other Vehicles",
+      AlertStatus.normal, AlertSize.mid,
+      Priority.LOW, VisualAlert.steerRequired, AudibleAlert.none, .0, .1, .1),
+  },
+
+  EventName.laneChangeRight: {
+    ET.WARNING: Alert(
+      "Changing Lane to the Right",
+      "Monitor Other Vehicles",
+      AlertStatus.normal, AlertSize.mid,
+      Priority.LOW, VisualAlert.steerRequired, AudibleAlert.none, .0, .1, .1),
+  },
+
   EventName.steerSaturated: {
     ET.WARNING: Alert(
       "TAKE CONTROL",

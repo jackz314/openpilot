@@ -11,7 +11,7 @@ cp = get_car_can_parser()
 packer = CANPacker("honda_civic_touring_2016_can_generated")
 rpacker = CANPacker("acura_ilx_2016_nidec")
 
-def can_function(pm, speed, angle, idx, cruise_button, is_engaged):
+def can_function(pm, speed, angle, idx, cruise_button, is_engaged, left_blinker, right_blinker):
 
   msg = []
 
@@ -45,7 +45,7 @@ def can_function(pm, speed, angle, idx, cruise_button, is_engaged):
   msg.append(packer.make_can_msg("DOORS_STATUS", 0, {}, idx))
   msg.append(packer.make_can_msg("CRUISE_PARAMS", 0, {}, idx))
   msg.append(packer.make_can_msg("CRUISE", 0, {}, idx))
-  msg.append(packer.make_can_msg("SCM_FEEDBACK", 0, {"MAIN_ON": 1}, idx))
+  msg.append(packer.make_can_msg("SCM_FEEDBACK", 0, {"MAIN_ON": 1, "LEFT_BLINKER": left_blinker, "RIGHT_BLINKER": right_blinker}, idx))
   msg.append(packer.make_can_msg("POWERTRAIN_DATA", 0, {"ACC_STATUS": int(is_engaged)}, idx))
 
   # *** cam bus ***

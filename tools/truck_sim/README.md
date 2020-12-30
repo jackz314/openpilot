@@ -21,18 +21,20 @@ I've also included integration with Euro Truck Simulator 2 / American Truck Simu
 
 OP sends control signals back to truck sim with a virtual joystick found in [joystick.py](joystick.py), you may need to tweak control settings in truck sim to make it work (should all be inverted). After starting the bridge, you can control OP by pressing "C" to engage and increase cruise speed, press "Z" to decrease cruise speed, and press "V" to cancel OP and disengage.
 
+Stock auto lane change is supported, initiate a lane change like you would on a real car by turning on the corresponding turning indicator lights (usually '[' and ']' in truck sim). The only difference from OP in a real car is that you don't need to additionally steer left or right to start the lane change, it would start automatically shortly after the indicators are on.
+
 ## Notes
 
-I have found that in truck sim, viewing perspectives 6 and 7 work the best, 1 and 2 also kinda work but they are worse than 6 & 7. 
+I have found that in truck sim, using OP with viewing perspective 6 works the best, 1 and 2 also kinda work but they perform worse than 6. 
 
 Setting screen capture framerate to 20 FPS seems to work pretty smoothly, and sometimes performs better than higher framerates, so I'd start there and tweak if needed. 
 
-OP seems to turn too early a lot of the times, this is probably due to truck sim's camera perspective being in the back, which makes the truck steer out of lane, this could perhaps be fixed by adjusting the viewing perspective (I don't know how to move the camera forward or back) in truck sim, or tweaking OP somehow. 
+OP works pretty nicely now in truck sim, but occasionally it still under or over steer when the turn is too tight, to improve this, you can tweak the steering ratio and the max steering angle. Dial them down if OP is under-steering (turns are too wide), and push them up if OP is over-steering (turns are too tight). 
 
 ## Future Improvements
 
-Right now OP doesn't quite work as expected in truck sim, especially on curves, OP would constantly swerve out of lane. This is likely due to the unusual viewing perspective (frame) from truck sim that's confusing OP. Perhaps some sort of offset or extra calibration (the normal calibration doesn't help) would improve this.
+Better tweaks for steering ratio and max steering angle.
 
-More control integration with truck sim, things like auto lane change by using the indicator (it's part of the telemetry data available from the SCS SDK) or engaging/disengaging OP based on in-game input and in-game cruise control status. These data fields are all available in [scssdk.py](scssdk.py).
+More control integration with truck sim, things like engaging/disengaging OP based on in-game input and in-game cruise control status. These data fields are all available in [scssdk.py](scssdk.py).
 
 Windows support? This will depend largely on the status of [WSL](https://docs.microsoft.com/en-us/windows/wsl/), particularly [support for OpenGL & OpenCL](https://devblogs.microsoft.com/directx/in-the-works-opencl-and-opengl-mapping-layers-to-directx/) via [DirectX mapping layers](https://devblogs.microsoft.com/directx/in-the-works-opencl-and-opengl-mapping-layers-to-directx/). Or perhaps someone would be able to port openpilot to Windows, that would be awesome but it'd be very difficult.

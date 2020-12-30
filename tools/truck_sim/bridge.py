@@ -19,7 +19,7 @@ from joystick import LinuxVirtualJoystick
 W, H = 1164, 874
 REPEAT_COUNTER = 5
 PRINT_DECIMATION = 100
-STEER_RATIO = 15.
+STEER_RATIO = 14.
 
 pm = messaging.PubMaster(['frame', 'sensorEvents', 'can'])
 sm = messaging.SubMaster(['carControl', 'controlsState'])
@@ -31,13 +31,16 @@ class VehicleState:
         self.angle = 0
         self.cruise_button = 0
         self.is_engaged = False
+        self.left_blinker = False
+        self.right_blinker = False
 
 
 def steer_rate_limit(old, new):
     # if True: return new
     # Rate limiting to 0.5 degrees per step
     # print("limit:",old,new)
-    limit = 0.25 * (65536/360)
+    # limit = 0.25 * (65536/360)
+    limit = 1
     if new > old + limit:
         return old + limit
     elif new < old - limit:
@@ -179,13 +182,13 @@ def fake_driver_monitoring():
 def can_function_runner(vs):
     i = 0
     while 1:
-        can_function(pm, vs.speed, vs.angle, i, vs.cruise_button, vs.is_engaged)
+        can_function(pm, vs.speed, vs.angle, i, vs.cruise_button, vs.is_engaged, vs.left_blinker, vs.right_blinker)
         time.sleep(0.01)
         i += 1
 
 
 def go(q):
-    max_steer_angle = 65  # temp
+    max_steer_angle = 60  # temp
 
     # camera.listen(cam_callback)
 
@@ -275,9 +278,9 @@ def go(q):
             brake_op = sm['carControl'].actuators.brake  # [0,1]
             steer_op = sm['controlsState'].angleSteersDes  # degrees [-180,180]
 
-            throttle_out = throttle_op * 65536
-            steer_out = steer_op * (32768/180)
-            brake_out = brake_op * 65536
+            throttle_out = throttle_op
+            steer_out = steer_op
+            brake_out = brake_op
 
             steer_out = steer_rate_limit(old_steer, steer_out)
             old_steer = steer_out
@@ -322,18 +325,18 @@ def go(q):
 
         # todo send commands back to truck sim
 
-        steer_truck = steer_out
-        steer_out = old_steer = steer_truck
+        # steer_truck = steer_out
+        # steer_out = old_steer = steer_truck
 
-        # steer_truck = steer_out / (max_steer_angle * STEER_RATIO * -1)
+        steer_truck = steer_out / (max_steer_angle * STEER_RATIO * 1)
 
-        # steer_truck = np.clip(steer_truck, -1,1)
-        # steer_out = steer_truck * (max_steer_angle * STEER_RATIO * -1)
-        # old_steer = steer_truck * (max_steer_angle * STEER_RATIO * -1)
+        steer_truck = np.clip(steer_truck, -1,1)
+        steer_out = steer_truck * (max_steer_angle * STEER_RATIO * 1)
+        old_steer = steer_truck * (max_steer_angle * STEER_RATIO * 1)
 
-        throttle = throttle_out / 0.6
-        steer = steer_truck
-        brake = brake_out
+        throttle = throttle_out * 65536 / 0.6
+        steer = steer_truck * 32768
+        brake = brake_out * 65536 / 0.7
         # brake = 0
         # print(throttle, steer, brake)
         joy.emit(steer, throttle, brake)
@@ -345,15 +348,19 @@ def go(q):
         imu_callback(s)
 
         vehicle_state.speed = 0 if s.paused else max(s.speed,0)
-        vehicle_state.angle = steer / 32768 * 180
-        # vehicle_state.angle = s.userSteer * 180
+        vehicle_state.angle = steer_out
+        # vehicle_state.angle = s.gameSteer # [-1,1]
         vehicle_state.cruise_button = cruise_button
         vehicle_state.is_engaged = is_openpilot_engaged
+        if not vehicle_state.left_blinker and s.blinkerLeftActive: print("left blinker on")
+        if not vehicle_state.right_blinker and s.blinkerRightActive: print("right blinker on")
+        vehicle_state.left_blinker = s.blinkerLeftActive
+        vehicle_state.right_blinker = s.blinkerRightActive
         # if s.userSteer: print(s.userSteer)
         if rk.frame % PRINT_DECIMATION == 0:
             # print("frame: ", "engaged:", is_openpilot_engaged, "; throttle: ", round(vc.throttle, 3), "; steer(c/deg): ", round(vc.steer, 3), round(steer_out, 3), "; brake: ", round(vc.brake, 3))
-            print("frame: ", "engaged:", is_openpilot_engaged, "; steering:", round(steer_out, 3), "steer op:", steer_op, "throttle:",
-                  throttle_out, "brake:", brake_out)
+            print("frame: ", "engaged:", is_openpilot_engaged, "; steering:", round(steer_out, 5), "game steer:", s.gameSteer, "throttle:",
+                  round(throttle_out, 5), "brake:", round(brake_out, 5))
 
         rk.keep_time()
 

@@ -15,8 +15,10 @@ LaneChangeDirection = log.PathPlan.LaneChangeDirection
 
 LOG_MPC = os.environ.get('LOG_MPC', False)
 
-LANE_CHANGE_SPEED_MIN = 45 * CV.MPH_TO_MS
+LANE_CHANGE_SPEED_MIN = 30 * CV.MPH_TO_MS
 LANE_CHANGE_TIME_MAX = 10.
+
+SIMULATION = "SIMULATION" in os.environ
 
 DESIRES = {
   LaneChangeDirection.none: {
@@ -56,7 +58,7 @@ class PathPlanner():
 
     self.setup_mpc()
     self.solution_invalid_cnt = 0
-    self.lane_change_enabled = Params().get('LaneChangeEnabled') == b'1'
+    self.lane_change_enabled = Params().get('LaneChangeEnabled') == b'1' if not SIMULATION else True
     self.lane_change_state = LaneChangeState.off
     self.lane_change_direction = LaneChangeDirection.none
     self.lane_change_timer = 0.0
@@ -103,11 +105,14 @@ class PathPlanner():
     below_lane_change_speed = v_ego < LANE_CHANGE_SPEED_MIN
 
     if sm['carState'].leftBlinker:
+      print("left blinker")
       self.lane_change_direction = LaneChangeDirection.left
     elif sm['carState'].rightBlinker:
+      print("right blinker")
       self.lane_change_direction = LaneChangeDirection.right
 
     if (not active) or (self.lane_change_timer > LANE_CHANGE_TIME_MAX) or (not self.lane_change_enabled):
+      if self.lane_change_direction != LaneChangeDirection.none: print("LANE CHANGE OFF!", active, self.lane_change_timer)
       self.lane_change_state = LaneChangeState.off
       self.lane_change_direction = LaneChangeDirection.none
     else:
@@ -117,7 +122,9 @@ class PathPlanner():
 
       blindspot_detected = ((sm['carState'].leftBlindspot and self.lane_change_direction == LaneChangeDirection.left) or
                             (sm['carState'].rightBlindspot and self.lane_change_direction == LaneChangeDirection.right))
-
+      if SIMULATION:
+        torque_applied = True
+        blindspot_detected = False
       lane_change_prob = self.LP.l_lane_change_prob + self.LP.r_lane_change_prob
 
       # State transitions
