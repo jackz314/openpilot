@@ -186,7 +186,7 @@ def can_function_runner(vs):
         time.sleep(0.01)
         i += 1
 
-BASE_MAX_STEER_ANGLE = 38.5  # tweak to set base steer ratio/angle
+BASE_MAX_STEER_ANGLE = 38.3  # tweak to set base steer ratio/angle
 def go(q):
     # camera.listen(cam_callback)
 
@@ -329,7 +329,7 @@ def go(q):
         s.update()
         imu_callback(s)
 
-        max_steer_angle = BASE_MAX_STEER_ANGLE + max(0, s.speed-11) / 1.55 # decrease the constant to decrease change of steer ration per change of speed
+        max_steer_angle = BASE_MAX_STEER_ANGLE + max(0, s.speed-11) / 1.47 # decrease the constant to decrease change of steer ration per change of speed
         # max_steer_angle = 59 # alternatively, use a constant ratio
 
         steer_truck = steer_out / (max_steer_angle * STEER_RATIO * 1)
