@@ -40,7 +40,7 @@ def steer_rate_limit(old, new):
     # Rate limiting to 0.5 degrees per step
     # print("limit:",old,new)
     # limit = 0.25 * (65536/360)
-    limit = 1
+    limit = 1.5
     if new > old + limit:
         return old + limit
     elif new < old - limit:
@@ -186,10 +186,8 @@ def can_function_runner(vs):
         time.sleep(0.01)
         i += 1
 
-
+BASE_MAX_STEER_ANGLE = 38.5  # tweak to set base steer ratio/angle
 def go(q):
-    max_steer_angle = 60  # temp
-
     # camera.listen(cam_callback)
 
     # imu.listen(imu_callback)
@@ -328,6 +326,12 @@ def go(q):
         # steer_truck = steer_out
         # steer_out = old_steer = steer_truck
 
+        s.update()
+        imu_callback(s)
+
+        max_steer_angle = BASE_MAX_STEER_ANGLE + max(0, s.speed-11) / 1.55 # decrease the constant to decrease change of steer ration per change of speed
+        # max_steer_angle = 59 # alternatively, use a constant ratio
+
         steer_truck = steer_out / (max_steer_angle * STEER_RATIO * 1)
 
         steer_truck = np.clip(steer_truck, -1,1)
@@ -336,16 +340,13 @@ def go(q):
 
         throttle = throttle_out * 65536 / 0.6
         steer = steer_truck * 32768
-        brake = brake_out * 65536 / 0.7
+        brake = brake_out * 65536 / 0.6
         # brake = 0
         # print(throttle, steer, brake)
         joy.emit(steer, throttle, brake)
         # --------------Step 3-------------------------------
         # vel = vehicle.get_velocity()
         # speed = math.sqrt(vel.x**2 + vel.y**2 + vel.z**2) # in m/s
-
-        s.update()
-        imu_callback(s)
 
         vehicle_state.speed = 0 if s.paused else max(s.speed,0)
         vehicle_state.angle = steer_out

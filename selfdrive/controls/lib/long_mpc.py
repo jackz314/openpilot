@@ -9,7 +9,8 @@ from selfdrive.controls.lib.longitudinal_mpc import libmpc_py
 from selfdrive.controls.lib.drive_helpers import MPC_COST_LONG
 
 LOG_MPC = os.environ.get('LOG_MPC', False)
-
+SIMULATION = "SIMULATION" in os.environ
+STOPPING_DISTANCE = 2.4 if not SIMULATION else 0
 
 class LongitudinalMpc():
   def __init__(self, mpc_id):
@@ -63,7 +64,8 @@ class LongitudinalMpc():
     self.cur_state[0].x_ego = 0.0
 
     if lead is not None and lead.status:
-      x_lead = lead.dRel
+      # x_lead = lead.dRel
+      x_lead = max(0, lead.dRel - STOPPING_DISTANCE)  # increase stopping distance to car by X [m]
       v_lead = max(0.0, lead.vLead)
       a_lead = lead.aLeadK
 

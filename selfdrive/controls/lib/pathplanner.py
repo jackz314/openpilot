@@ -64,6 +64,7 @@ class PathPlanner():
     self.lane_change_timer = 0.0
     self.lane_change_ll_prob = 1.0
     self.prev_one_blinker = False
+    self.steer_ratio_boost = 0
 
   def setup_mpc(self):
     self.libmpc = libmpc_py.libmpc
@@ -180,12 +181,18 @@ class PathPlanner():
                         list(self.LP.l_poly), list(self.LP.r_poly), list(self.LP.d_poly),
                         self.LP.l_prob, self.LP.r_prob, curvature_factor, v_ego_mpc, self.LP.lane_width)
 
+    if v_ego > 11.111:
+      # self.steer_ratio_boost = 2
+      self.steer_ratio_boost = 0 # disabled for now
+    else:
+      self.steer_ratio_boost = 0
+
     # reset to current steer angle if not active or overriding
     if active:
       delta_desired = self.mpc_solution[0].delta[1]
-      rate_desired = math.degrees(self.mpc_solution[0].rate[0] * VM.sR)
+      rate_desired = math.degrees(self.mpc_solution[0].rate[0] * (VM.sR+self.steer_ratio_boost))
     else:
-      delta_desired = math.radians(angle_steers - angle_offset) / VM.sR
+      delta_desired = math.radians(angle_steers - angle_offset) / (VM.sR+self.steer_ratio_boost)
       rate_desired = 0.0
 
     self.cur_state[0].delta = delta_desired
