@@ -2,8 +2,11 @@ from common.numpy_fast import clip, interp
 from selfdrive.config import Conversions as CV
 from cereal import car
 
+import os
+SIMULATION = "SIMULATION" in os.environ
+
 # kph
-V_CRUISE_MAX = 144
+V_CRUISE_MAX = 144 if not SIMULATION else 220
 V_CRUISE_MIN = 8
 V_CRUISE_DELTA = 8
 V_CRUISE_ENABLE_MIN = 40

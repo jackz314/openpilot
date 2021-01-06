@@ -10,7 +10,7 @@ from selfdrive.controls.lib.drive_helpers import MPC_COST_LONG
 
 LOG_MPC = os.environ.get('LOG_MPC', False)
 SIMULATION = "SIMULATION" in os.environ
-STOPPING_DISTANCE = 2.55 if not SIMULATION else 0
+STOPPING_DISTANCE = 3 if not SIMULATION else 0
 
 class LongitudinalMpc():
   def __init__(self, mpc_id):

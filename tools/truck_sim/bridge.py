@@ -375,7 +375,7 @@ def go(q):
         s.update()
         imu_callback(s)
 
-        max_steer_angle = BASE_MAX_STEER_ANGLE + max(0, s.speed-STEER_SPEED_OFFSET) / STEER_SPEED_DENOM # decrease the constant to decrease change of steer ration per change of speed
+        max_steer_angle = BASE_MAX_STEER_ANGLE + max(0, s.speed - STEER_SPEED_OFFSET) / STEER_SPEED_DENOM # decrease the constant to decrease change of steer ration per change of speed
         # max_steer_angle = 59 # alternatively, use a constant ratio
 
         steer_truck = steer_out / (max_steer_angle * STEER_RATIO * 1)
@@ -386,7 +386,7 @@ def go(q):
 
         throttle = throttle_out * 65536 / 0.5
         steer = steer_truck * 32768
-        brake = brake_out * 65536 / 0.55
+        brake = brake_out * 65536 / 0.9
         # brake = 0
         # print(throttle, steer, brake)
         joy.emit(steer, throttle, brake)

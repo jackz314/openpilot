@@ -14,11 +14,10 @@ LaneChangeState = log.PathPlan.LaneChangeState
 LaneChangeDirection = log.PathPlan.LaneChangeDirection
 
 LOG_MPC = os.environ.get('LOG_MPC', False)
-
-LANE_CHANGE_SPEED_MIN = 30 * CV.MPH_TO_MS
-LANE_CHANGE_TIME_MAX = 10.
-
 SIMULATION = "SIMULATION" in os.environ
+
+LANE_CHANGE_SPEED_MIN = (45 if not SIMULATION else 20) * CV.MPH_TO_MS
+LANE_CHANGE_TIME_MAX = 10.
 
 DESIRES = {
   LaneChangeDirection.none: {
