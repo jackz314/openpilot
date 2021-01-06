@@ -106,14 +106,14 @@ class PathPlanner():
     below_lane_change_speed = v_ego < LANE_CHANGE_SPEED_MIN
 
     if sm['carState'].leftBlinker:
-      print("left blinker")
+      # print("left blinker")
       self.lane_change_direction = LaneChangeDirection.left
     elif sm['carState'].rightBlinker:
-      print("right blinker")
+      # print("right blinker")
       self.lane_change_direction = LaneChangeDirection.right
 
     if (not active) or (self.lane_change_timer > LANE_CHANGE_TIME_MAX) or (not self.lane_change_enabled):
-      if self.lane_change_direction != LaneChangeDirection.none: print("LANE CHANGE OFF!", active, self.lane_change_timer)
+      # if self.lane_change_direction != LaneChangeDirection.none: print("LANE CHANGE OFF!", active, self.lane_change_timer)
       self.lane_change_state = LaneChangeState.off
       self.lane_change_direction = LaneChangeDirection.none
     else:

@@ -1,10 +1,29 @@
 import mmap
 import struct
 
+def create_files():
+    import os
+    os.umask(0)
+    try:
+        os.mkdir("/dev/shm/SCS", mode=0o777)
+    except: # already exists, change permission
+        os.chmod("/dev/shm/SCS", 0o777)
+    os.close(os.open("/dev/shm/SCS/SCSTelemetry",os.O_CREAT | os.O_RDWR, 0o777))
+    os.chmod("/dev/shm/SCS/SCSTelemetry", 0o777)
+    with open("/dev/shm/SCS/SCSTelemetry", "wb+") as fd:
+        fd.write(b"\0"*22420) # size of telemetry struct
+        fd.flush()
 
 class scssdkclient:
     def __init__(self):
-        self.fd = open("/dev/shm/SCS/SCSTelemetry")
+        try:
+            self.fd = open("/dev/shm/SCS/SCSTelemetry")
+        except: # file probably doesn't exist
+            create_files()
+            self.fd = open("/dev/shm/SCS/SCSTelemetry")
+
+    def __del__(self):
+        self.fd.close()
 
     # noinspection PyAttributeOutsideInit
     def update(self):

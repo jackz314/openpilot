@@ -19,7 +19,16 @@ from joystick import LinuxVirtualJoystick
 W, H = 1164, 874
 REPEAT_COUNTER = 5
 PRINT_DECIMATION = 100
-STEER_RATIO = 14.
+
+from configparser import ConfigParser
+cfg = ConfigParser()
+cfg.read("./tweak.cfg")
+STEER_RATIO = cfg.getfloat("steer", "STEER_RATIO", fallback=14)
+STEER_SPEED_OFFSET = cfg.getfloat("steer", "STEER_SPEED_OFFSET", fallback=11)
+BASE_MAX_STEER_ANGLE = cfg.getfloat("steer", "BASE_MAX_STEER_ANGLE", fallback=38.4)  # tweak to set base steer ratio/angle
+STEER_SPEED_DENOM = cfg.getfloat("steer", "STEER_SPEED_DENOM", fallback=1.46)
+print("tweak values: steer ratio:", STEER_RATIO, "steer speed offset:", STEER_SPEED_OFFSET,
+      "max steer angle:", BASE_MAX_STEER_ANGLE, "steer speed denominator:", STEER_SPEED_DENOM)
 
 pm = messaging.PubMaster(['frame', 'sensorEvents', 'can'])
 sm = messaging.SubMaster(['carControl', 'controlsState'])
@@ -126,6 +135,43 @@ def health_function():
         pm.send('health', dat)
         time.sleep(0.5)
 
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+
+class ConfigModifiedHandler(FileSystemEventHandler):
+    def __init__(self, path, file_name, callback):
+        self.path = path
+        self.file_name = file_name
+        self.callback = callback
+
+        self.observer = Observer()
+        self.observer.schedule(self, path, recursive=False)
+        self.observer.start()
+
+    def join(self):
+        self.observer.join()
+
+    def __del__(self):
+        self.observer.stop()
+
+    def on_modified(self, event):
+        if event.src_path.endswith(self.file_name) and not event.is_directory:
+            self.callback()
+
+def config_change_callback():
+    cfg.read("./tweak.cfg")
+    global STEER_RATIO, STEER_SPEED_OFFSET, BASE_MAX_STEER_ANGLE, STEER_SPEED_DENOM
+    STEER_RATIO = cfg.getfloat("steer", "STEER_RATIO", fallback=14)
+    STEER_SPEED_OFFSET = cfg.getfloat("steer", "STEER_SPEED_OFFSET", fallback=11)
+    BASE_MAX_STEER_ANGLE = cfg.getfloat("steer", "BASE_MAX_STEER_ANGLE", fallback=38.4)
+    STEER_SPEED_DENOM = cfg.getfloat("steer", "STEER_SPEED_DENOM", fallback=1.46)
+    print("new tweak values: steer ratio:", STEER_RATIO, "steer speed offset:", STEER_SPEED_OFFSET,
+          "max steer angle:", BASE_MAX_STEER_ANGLE, "steer speed denominator:", STEER_SPEED_DENOM)
+
+def config_watcher():
+    handler = ConfigModifiedHandler("./", "tweak.cfg", config_change_callback)
+    handler.join()
+
 from scssdk import scssdkclient
 
 def imu_callback(s: scssdkclient):
@@ -150,7 +196,7 @@ def imu_function():
         time.sleep(0.01)
 
 def fake_gps():
-    # TODO: read GPS from CARLA
+    # TODO: read GPS from truck sim, also speed limit
     pm = messaging.PubMaster(['gpsLocationExternal'])
     while 1:
         dat = messaging.new_message('gpsLocationExternal')
@@ -186,7 +232,6 @@ def can_function_runner(vs):
         time.sleep(0.01)
         i += 1
 
-BASE_MAX_STEER_ANGLE = 38.3  # tweak to set base steer ratio/angle
 def go(q):
     # camera.listen(cam_callback)
 
@@ -205,6 +250,7 @@ def go(q):
     # threading.Thread(target=cam_function).start()
     # time.sleep(1)
     # threading.Thread(target=imu_function).start()
+    threading.Thread(target=config_watcher).start()
     threading.Thread(target=health_function).start()
     threading.Thread(target=fake_driver_monitoring).start()
     threading.Thread(target=fake_gps).start()
@@ -329,7 +375,7 @@ def go(q):
         s.update()
         imu_callback(s)
 
-        max_steer_angle = BASE_MAX_STEER_ANGLE + max(0, s.speed-11) / 1.47 # decrease the constant to decrease change of steer ration per change of speed
+        max_steer_angle = BASE_MAX_STEER_ANGLE + max(0, s.speed-STEER_SPEED_OFFSET) / STEER_SPEED_DENOM # decrease the constant to decrease change of steer ration per change of speed
         # max_steer_angle = 59 # alternatively, use a constant ratio
 
         steer_truck = steer_out / (max_steer_angle * STEER_RATIO * 1)
@@ -338,9 +384,9 @@ def go(q):
         steer_out = steer_truck * (max_steer_angle * STEER_RATIO * 1)
         old_steer = steer_truck * (max_steer_angle * STEER_RATIO * 1)
 
-        throttle = throttle_out * 65536 / 0.6
+        throttle = throttle_out * 65536 / 0.5
         steer = steer_truck * 32768
-        brake = brake_out * 65536 / 0.6
+        brake = brake_out * 65536 / 0.55
         # brake = 0
         # print(throttle, steer, brake)
         joy.emit(steer, throttle, brake)
