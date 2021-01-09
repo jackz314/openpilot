@@ -3,7 +3,7 @@ import numpy as np
 import cereal.messaging as messaging
 from PIL import ImageFont, ImageDraw, Image
 
-font = ImageFont.truetype("arial", size=72)
+# font = ImageFont.truetype("arial", size=72)
 def get_frame(idx):
   img = np.zeros((874, 1164, 3), np.uint8)
   img[100:400, 100:100+(idx % 10) * 100] = 255
@@ -11,7 +11,7 @@ def get_frame(idx):
   # big number
   im2 = Image.new("RGB", (200, 200))
   draw = ImageDraw.Draw(im2)
-  draw.text((10, 100), "%02d" % idx, font=font)
+  draw.text((10, 100), "%02d" % idx)
   img[400:600, 400:600] = np.array(im2.getdata()).reshape((200, 200, 3))
   return img.tostring()
 
