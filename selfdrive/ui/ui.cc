@@ -2,17 +2,12 @@
 #include <cmath>
 #include <stdlib.h>
 #include <stdbool.h>
-#include <signal.h>
 #include <unistd.h>
 #include <assert.h>
-#include <math.h>
-#include <poll.h>
-#include <sys/mman.h>
 
 #include "common/util.h"
 #include "common/swaglog.h"
 #include "common/visionimg.h"
-#include "common/utilpp.h"
 #include "ui.hpp"
 #include "paint.hpp"
 
@@ -29,27 +24,9 @@ static void ui_init_vision(UIState *s) {
   s->scene.world_objects_visible = false;
 
   for (int i = 0; i < s->vipc_client->num_buffers; i++) {
-    if (s->khr[i] != 0) {
-      visionimg_destroy_gl(s->khr[i], s->priv_hnds[i]);
-      glDeleteTextures(1, &s->frame_texs[i]);
-    }
-    VisionBuf * buf = &s->vipc_client->buffers[i];
+    s->texture[i].reset(new EGLImageTexture(&s->vipc_client->buffers[i]));
 
-    VisionImg img = {
-      .fd = buf->fd,
-      .format = VISIONIMG_FORMAT_RGB24,
-      .width = (int)buf->width,
-      .height = (int)buf->height,
-      .stride = (int)buf->stride,
-      .bpp = 3,
-      .size = buf->len,
-    };
-#ifndef QCOM
-    s->priv_hnds[i] = buf->addr;
-#endif
-    s->frame_texs[i] = visionimg_to_gl(&img, &s->khr[i], &s->priv_hnds[i]);
-
-    glBindTexture(GL_TEXTURE_2D, s->frame_texs[i]);
+    glBindTexture(GL_TEXTURE_2D, s->texture[i]->frame_tex);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 
@@ -69,7 +46,6 @@ void ui_init(UIState *s) {
   s->started = false;
   s->status = STATUS_OFFROAD;
   s->scene.satelliteCount = -1;
-  read_param(&s->is_metric, "IsMetric");
 
   s->fb = framebuffer_init("ui", 0, true, &s->fb_w, &s->fb_h);
   assert(s->fb);
@@ -77,8 +53,9 @@ void ui_init(UIState *s) {
   ui_nvg_init(s);
 
   s->last_frame = nullptr;
-  s->vipc_client = new VisionIpcClient("camerad", VISION_STREAM_RGB_BACK, true);
-
+  s->vipc_client_rear = new VisionIpcClient("camerad", VISION_STREAM_RGB_BACK, true);
+  s->vipc_client_front = new VisionIpcClient("camerad", VISION_STREAM_RGB_FRONT, true);
+  s->vipc_client = s->vipc_client_rear;
 }
 
 template <class T>
@@ -125,7 +102,7 @@ static void update_model(UIState *s, const cereal::ModelDataV2::Reader &model) {
   update_line_data(s, model.getPosition(), 0.5, 0, &scene.track_vertices, path_length);
 }
 
-void update_sockets(UIState *s) {
+static void update_sockets(UIState *s) {
 
   UIScene &scene = s->scene;
   SubMaster &sm = *(s->sm);
@@ -225,7 +202,7 @@ void update_sockets(UIState *s) {
   s->started = scene.thermal.getStarted() || scene.frontview;
 }
 
-static void ui_read_params(UIState *s) {
+static void update_params(UIState *s) {
   const uint64_t frame = s->sm->frame;
 
   if (frame % (5*UI_FREQ) == 0) {
@@ -239,8 +216,10 @@ static void ui_read_params(UIState *s) {
   }
 }
 
-void ui_update_vision(UIState *s) {
+static void update_vision(UIState *s) {
   if (!s->vipc_client->connected && s->started) {
+    s->vipc_client = s->scene.frontview ? s->vipc_client_front : s->vipc_client_rear;
+
     if (s->vipc_client->connect(false)){
       ui_init_vision(s);
     }
@@ -255,9 +234,9 @@ void ui_update_vision(UIState *s) {
 }
 
 void ui_update(UIState *s) {
-  ui_read_params(s);
+  update_params(s);
   update_sockets(s);
-  ui_update_vision(s);
+  update_vision(s);
 
   // Handle onroad/offroad transition
   if (!s->started && s->status != STATUS_OFFROAD) {
@@ -275,7 +254,7 @@ void ui_update(UIState *s) {
     s->scene.alert_size = cereal::ControlsState::AlertSize::NONE;
   }
 
-  // Handle controls/fcamera timeout
+  // Handle controls timeout
   if (s->started && !s->scene.frontview && ((s->sm)->frame - s->started_frame) > 10*UI_FREQ) {
     if ((s->sm)->rcv_frame("controlsState") < s->started_frame) {
       // car is started, but controlsState hasn't been seen at all
@@ -284,8 +263,7 @@ void ui_update(UIState *s) {
       s->scene.alert_size = cereal::ControlsState::AlertSize::MID;
     } else if (((s->sm)->frame - (s->sm)->rcv_frame("controlsState")) > 5*UI_FREQ) {
       // car is started, but controls is lagging or died
-      if (s->scene.alert_text2 != "Controls Unresponsive" &&
-          s->scene.alert_text1 != "Camera Malfunction") {
+      if (s->scene.alert_text2 != "Controls Unresponsive") {
         s->sound->play(AudibleAlert::CHIME_WARNING_REPEAT);
         LOGE("Controls unresponsive");
       }
@@ -294,18 +272,6 @@ void ui_update(UIState *s) {
       s->scene.alert_text2 = "Controls Unresponsive";
       s->scene.alert_size = cereal::ControlsState::AlertSize::FULL;
       s->status = STATUS_ALERT;
-    }
-
-    const uint64_t frame_pkt = (s->sm)->rcv_frame("frame");
-    const uint64_t frame_delayed = (s->sm)->frame - frame_pkt;
-    const uint64_t since_started = (s->sm)->frame - s->started_frame;
-    if ((frame_pkt > s->started_frame || since_started > 15*UI_FREQ) && frame_delayed > 5*UI_FREQ) {
-      // controls is fine, but rear camera is lagging or died
-      s->scene.alert_text1 = "Camera Malfunction";
-      s->scene.alert_text2 = "Contact Support";
-      s->scene.alert_size = cereal::ControlsState::AlertSize::FULL;
-      s->status = STATUS_DISENGAGED;
-      s->sound->stop();
     }
   }
 }

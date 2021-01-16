@@ -8,7 +8,6 @@
 #include "messaging.hpp"
 
 #include "common/util.h"
-#include "common/utilpp.h"
 #include "common/timing.h"
 #include "common/swaglog.h"
 
@@ -26,7 +25,7 @@ void camera_open(CameraState *s, bool rear) {
 }
 
 void camera_close(CameraState *s) {
-  s->buf.stop();
+  // empty
 }
 
 void camera_init(VisionIpcServer * v, CameraState *s, int camera_id, unsigned int fps, cl_device_id device_id, cl_context ctx, VisionStreamType rgb_type, VisionStreamType yuv_type) {
@@ -118,6 +117,6 @@ void cameras_run(MultiCameraState *s) {
   std::thread t = start_process_thread(s, "processing", &s->rear, camera_process_rear);
   set_thread_name("frame_streaming");
   run_frame_stream(s);
-  cameras_close(s);
   t.join();
+  cameras_close(s);
 }

@@ -453,6 +453,7 @@ FW_VERSIONS = {
       b'37805-5AN-CH20\x00\x00',
       b'37805-5AN-E630\x00\x00',
       b'37805-5AN-L840\x00\x00',
+      b'37805-5AN-L930\x00\x00',
       b'37805-5AN-L940\x00\x00',
       b'37805-5AN-LF20\x00\x00',
       b'37805-5AN-LH20\x00\x00',
@@ -902,6 +903,7 @@ FW_VERSIONS = {
     (Ecu.programmedFuelInjection, 0x18da10f1, None): [
       b'37805-5YF-A230\x00\x00',
       b'37805-5YF-A420\x00\x00',
+      b'37805-5YF-A430\x00\x00',
     ],
     (Ecu.vsa, 0x18da28f1, None): [
       b'57114-TJB-A040\x00\x00',
