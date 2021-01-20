@@ -232,7 +232,7 @@ void fill_frame_image(cereal::FrameData::Builder &framed, const CameraBuf *b) {
       memcpy(&resized_dat[(r*new_width+c)*3], &dat[goff+r*b->rgb_stride*scale+c*3*scale], 3*sizeof(uint8_t));
     }
   }
-  framed.setImage(kj::arrayPtr((const uint8_t*)resized_dat, new_width*new_height*3));
+  framed.setImage(kj::arrayPtr((const uint8_t*)resized_dat, (size_t)new_width*new_height*3));
   delete[] resized_dat;
 }
 
@@ -339,7 +339,7 @@ void set_exposure_target(CameraState *c, const uint8_t *pix_ptr, int x_start, in
 extern ExitHandler do_exit;
 
 void *processing_thread(MultiCameraState *cameras, const char *tname,
-                          CameraState *cs, process_thread_cb callback) {
+                        CameraState *cs, process_thread_cb callback) {
   set_thread_name(tname);
 
   for (int cnt = 0; !do_exit; cnt++) {
