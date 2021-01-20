@@ -49,7 +49,7 @@ def steer_rate_limit(old, new):
     # Rate limiting to 0.5 degrees per step
     # print("limit:",old,new)
     # limit = 0.25 * (65536/360)
-    limit = 1.5
+    limit = 1
     if new > old + limit:
         return old + limit
     elif new < old - limit:
@@ -386,7 +386,7 @@ def go(q):
 
         throttle = throttle_out * 65536 / 0.5
         steer = steer_truck * 32768
-        brake = brake_out * 65536 / 0.9
+        brake = brake_out * 65536 / 0.8
         # brake = 0
         # print(throttle, steer, brake)
         joy.emit(steer, throttle, brake)

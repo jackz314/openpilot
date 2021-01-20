@@ -424,7 +424,7 @@ class CarInterface(CarInterfaceBase):
 
     ret.gasMaxBP = [0.]  # m/s
     ret.gasMaxV = [0.6] if ret.enableGasInterceptor else [0.]  # max gas allowed
-    ret.brakeMaxBP = [5+10., 20+15.]  # m/s increase max bp
+    ret.brakeMaxBP = [5+13., 20+20.]  # m/s increase max brake bp
     # ret.brakeMaxBP = [5., 20.]  # m/s
     ret.brakeMaxV = [1., 0.9]   # max brake allowed
     # ret.brakeMaxV = [1., 0.8]   # max brake allowed
