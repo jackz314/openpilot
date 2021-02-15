@@ -212,7 +212,7 @@ class Controls:
       if (self.sm['health'].safetyModel != self.CP.safetyModel and self.sm.frame > 2 / DT_CTRL) or \
               self.mismatch_counter >= 200:
         self.events.add(EventName.controlsMismatch)
-      if not self.sm.alive['plan'] and self.sm.alive['pathPlan']:
+      if not self.sm.alive['longitudinalPlan'] and self.sm.alive['pathPlan']:
         # only plan not being received: radar not communicating
         self.events.add(EventName.radarCommIssue)
       elif not self.sm.all_alive_and_valid():
@@ -232,9 +232,9 @@ class Controls:
         self.events.add(EventName.posenetInvalid)
       if not self.sm['liveLocationKalman'].deviceStable:
         self.events.add(EventName.deviceFalling)
-      if not self.sm['plan'].radarValid:
+      if not self.sm['longitudinalPlan'].radarValid:
         self.events.add(EventName.radarFault)
-      if self.sm['plan'].radarCanError:
+      if self.sm['longitudinalPlan'].radarCanError:
         self.events.add(EventName.radarCanError)
       if log.HealthData.FaultType.relayMalfunction in self.sm['health'].faults:
         self.events.add(EventName.relayMalfunction)
@@ -242,7 +242,7 @@ class Controls:
         self.events.add(EventName.cameraMalfunction)
       if self.sm['modelV2'].frameDropPerc > 20:
         self.events.add(EventName.modeldLagging)
-    if self.sm['plan'].fcw:
+    if self.sm['longitudinalPlan'].fcw:
       self.events.add(EventName.fcw)
 
       # Check if all manager processes are running

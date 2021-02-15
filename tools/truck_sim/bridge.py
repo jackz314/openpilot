@@ -128,7 +128,7 @@ def health_function():
         dat.valid = True
         dat.health = {
             'ignitionLine': True,
-            'hwType': "blackPanda",
+            'pandaType': "blackPanda",
             'controlsAllowed': True,
             'safetyModel': car.CarParams.SafetyModel.hondaNidec,
         }
@@ -205,7 +205,7 @@ def fake_gps():
 
 
 def fake_driver_monitoring():
-    pm = messaging.PubMaster(['driverState', 'dMonitoringState'])
+    pm = messaging.PubMaster(['driverState', 'driverMonitoringState'])
     while 1:
         # dmonitoringmodeld output
         dat = messaging.new_message('driverState')
@@ -213,14 +213,14 @@ def fake_driver_monitoring():
         pm.send('driverState', dat)
 
         # dmonitoringd output
-        dat = messaging.new_message('dMonitoringState')
-        dat.dMonitoringState = {
+        dat = messaging.new_message('driverMonitoringState')
+        dat.driverMonitoringState = {
             "faceDetected": True,
             "isDistracted": False,
             "awarenessStatus": 1.,
-            "isRHD": False,
+            # "isRHD": False,
         }
-        pm.send('dMonitoringState', dat)
+        pm.send('driverMonitoringState', dat)
 
         time.sleep(DT_DMON)  # 0.1
 
