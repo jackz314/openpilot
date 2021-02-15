@@ -36,12 +36,9 @@
 #define SATURATE_IL 1600
 #define NIBBLE_TO_HEX(n) ((n) < 10 ? (n) + '0' : ((n) - 10) + 'a')
 
-Panda * panda = NULL;
+Panda * panda = nullptr;
 std::atomic<bool> safety_setter_thread_running(false);
-bool spoofing_started = false;
-bool fake_send = false;
-bool connected_once = false;
-bool ignition = false;
+std::atomic<bool> ignition(false);
 
 ExitHandler do_exit;
 struct tm get_time(){
@@ -120,9 +117,12 @@ void safety_setter_thread() {
 
 
 bool usb_connect() {
+  static bool connected_once = false;
+
+  std::unique_ptr<Panda> tmp_panda;
   try {
-    assert(panda == NULL);
-    panda = new Panda();
+    assert(panda == nullptr);
+    tmp_panda = std::make_unique<Panda>();
   } catch (std::exception &e) {
     return false;
   }
@@ -130,15 +130,15 @@ bool usb_connect() {
   Params params = Params();
 
   if (getenv("BOARDD_LOOPBACK")) {
-    panda->set_loopback(true);
+    tmp_panda->set_loopback(true);
   }
 
-  const char *fw_sig_buf = panda->get_firmware_version();
-  if (fw_sig_buf){
-    params.write_db_value("PandaFirmware", fw_sig_buf, 128);
+  if (auto fw_sig = tmp_panda->get_firmware_version(); fw_sig) {
+    params.write_db_value("PandaFirmware", (const char *)fw_sig->data(), fw_sig->size());
 
     // Convert to hex for offroad
     char fw_sig_hex_buf[16] = {0};
+    const uint8_t *fw_sig_buf = fw_sig->data();
     for (size_t i = 0; i < 8; i++){
       fw_sig_hex_buf[2*i] = NIBBLE_TO_HEX((uint8_t)fw_sig_buf[i] >> 4);
       fw_sig_hex_buf[2*i+1] = NIBBLE_TO_HEX((uint8_t)fw_sig_buf[i] & 0xF);
@@ -146,31 +146,24 @@ bool usb_connect() {
 
     params.write_db_value("PandaFirmwareHex", fw_sig_hex_buf, 16);
     LOGW("fw signature: %.*s", 16, fw_sig_hex_buf);
-
-    delete[] fw_sig_buf;
   } else { return false; }
 
   // get panda serial
-  const char *serial_buf = panda->get_serial();
-  if (serial_buf) {
-    size_t serial_sz = strnlen(serial_buf, 16);
-
-    params.write_db_value("PandaDongleId", serial_buf, serial_sz);
-    LOGW("panda serial: %.*s", serial_sz, serial_buf);
-
-    delete[] serial_buf;
+  if (auto serial = tmp_panda->get_serial(); serial) {
+    params.write_db_value("PandaDongleId", serial->c_str(), serial->length());
+    LOGW("panda serial: %s", serial->c_str());
   } else { return false; }
 
   // power on charging, only the first time. Panda can also change mode and it causes a brief disconneciton
 #ifndef __x86_64__
   if (!connected_once) {
-    panda->set_usb_power_mode(cereal::HealthData::UsbPowerMode::CDP);
+    tmp_panda->set_usb_power_mode(cereal::HealthData::UsbPowerMode::CDP);
   }
 #endif
 
-  if (panda->has_rtc){
+  if (tmp_panda->has_rtc){
     struct tm sys_time = get_time();
-    struct tm rtc_time = panda->get_rtc();
+    struct tm rtc_time = tmp_panda->get_rtc();
 
     if (!time_valid(sys_time) && time_valid(rtc_time)) {
       LOGE("System time wrong, setting from RTC");
@@ -182,25 +175,28 @@ bool usb_connect() {
   }
 
   connected_once = true;
+  panda = tmp_panda.release();
   return true;
 }
 
 // must be called before threads or with mutex
-void usb_retry_connect() {
+static bool usb_retry_connect() {
   LOGW("attempting to connect");
-  while (!usb_connect()) { util::sleep_for(100); }
-  LOGW("connected to board");
+  while (!do_exit && !usb_connect()) { util::sleep_for(100); }
+  if (panda) {
+    LOGW("connected to board");
+  }
+  return !do_exit;
 }
 
 void can_recv(PubMaster &pm) {
-  // create message
-  MessageBuilder msg;
-  auto event = msg.initEvent();
-  panda->can_receive(event);
-  pm.send("can", msg);
+  kj::Array<capnp::word> can_data;
+  panda->can_receive(can_data);
+  auto bytes = can_data.asBytes();
+  pm.send("can", bytes.begin(), bytes.size());
 }
 
-void can_send_thread() {
+void can_send_thread(bool fake_send) {
   LOGD("start send thread");
 
   Context * context = Context::create();
@@ -254,7 +250,7 @@ void can_recv_thread() {
 
     uint64_t cur_time = nanos_since_boot();
     int64_t remaining = next_frame_time - cur_time;
-    if (remaining > 0){
+    if (remaining > 0) {
       std::this_thread::sleep_for(std::chrono::nanoseconds(remaining));
     } else {
       if (ignition){
@@ -267,7 +263,7 @@ void can_recv_thread() {
   }
 }
 
-void can_health_thread() {
+void can_health_thread(bool spoofing_started) {
   LOGD("start health thread");
   PubMaster pm({"health"});
 
@@ -280,16 +276,13 @@ void can_health_thread() {
     MessageBuilder msg;
     auto healthData  = msg.initEvent().initHealth();
 
-    healthData.setHwType(cereal::HealthData::HwType::UNKNOWN);
+    healthData.setPandaType(cereal::HealthData::PandaType::UNKNOWN);
     pm.send("health", msg);
     util::sleep_for(500);
   }
 
   // run at 2hz
   while (!do_exit && panda->connected) {
-    MessageBuilder msg;
-    auto healthData = msg.initEvent().initHealth();
-
     health_t health = panda->get_health();
 
     if (spoofing_started) {
@@ -349,6 +342,8 @@ void can_health_thread() {
     uint16_t fan_speed_rpm = panda->get_fan_speed();
 
     // set fields
+    MessageBuilder msg;
+    auto healthData = msg.initEvent().initHealth();
     healthData.setUptime(health.uptime);
 
 #ifdef QCOM2
@@ -368,7 +363,7 @@ void can_health_thread() {
     healthData.setCanSendErrs(health.can_send_errs);
     healthData.setCanFwdErrs(health.can_fwd_errs);
     healthData.setGmlanSendErrs(health.gmlan_send_errs);
-    healthData.setHwType(panda->hw_type);
+    healthData.setPandaType(panda->hw_type);
     healthData.setUsbPowerMode(cereal::HealthData::UsbPowerMode(health.usb_power_mode));
     healthData.setSafetyModel(cereal::CarParams::SafetyModel(health.safety_model));
     healthData.setFanSpeedRpm(fan_speed_rpm);
@@ -428,10 +423,10 @@ void hardware_control_thread() {
 #endif
 
     // Other pandas don't have fan/IR to control
-    if (panda->hw_type != cereal::HealthData::HwType::UNO && panda->hw_type != cereal::HealthData::HwType::DOS) continue;
+    if (panda->hw_type != cereal::HealthData::PandaType::UNO && panda->hw_type != cereal::HealthData::PandaType::DOS) continue;
     if (sm.updated("thermal")){
       // Fan speed
-      uint16_t fan_speed = sm["thermal"].getThermal().getFanSpeed();
+      uint16_t fan_speed = sm["thermal"].getThermal().getFanSpeedPercentDesired();
       if (fan_speed != prev_fan_speed || cnt % 100 == 0){
         panda->set_fan_speed(fan_speed);
         prev_fan_speed = fan_speed;
@@ -464,18 +459,15 @@ void hardware_control_thread() {
   }
 }
 
-static void pigeon_publish_raw(PubMaster &pm, std::string dat) {
+static void pigeon_publish_raw(PubMaster &pm, const std::string &dat) {
   // create message
   MessageBuilder msg;
-  auto ublox_raw = msg.initEvent().initUbloxRaw(dat.length());
-  memcpy(ublox_raw.begin(), dat.data(), dat.length());
-
+  msg.initEvent().setUbloxRaw(capnp::Data::Reader((uint8_t*)dat.data(), dat.length()));
   pm.send("ubloxRaw", msg);
 }
 
-
 void pigeon_thread() {
-  if (!panda->is_pigeon){ return; };
+  if (!panda->is_pigeon) { return; };
 
   // ubloxRaw = 8042
   PubMaster pm({"ubloxRaw"});
@@ -488,12 +480,13 @@ void pigeon_thread() {
 #endif
 
   while (!do_exit && panda->connected) {
+    bool need_reset = false;
     std::string recv = pigeon->receive();
     if (recv.length() > 0) {
       if (recv[0] == (char)0x00){
         if (ignition) {
           LOGW("received invalid ublox message while onroad, resetting panda GPS");
-          pigeon->init();
+          need_reset = true;
         }
       } else {
         pigeon_publish_raw(pm, recv);
@@ -502,7 +495,7 @@ void pigeon_thread() {
 
     // init pigeon on rising ignition edge
     // since it was turned off in low power mode
-    if(ignition && !ignition_last) {
+    if((ignition && !ignition_last) || need_reset) {
       pigeon->init();
     }
 
@@ -526,32 +519,23 @@ int main() {
   err = set_core_affinity(3);
   LOG("set affinity returns %d", err);
 
-  // check the environment
-  if (getenv("STARTED")) {
-    spoofing_started = true;
-  }
-
-  if (getenv("FAKESEND")) {
-    fake_send = true;
-  }
-
   panda_set_power(true);
 
   while (!do_exit){
     std::vector<std::thread> threads;
-    threads.push_back(std::thread(can_health_thread));
+    threads.push_back(std::thread(can_health_thread, getenv("STARTED") != nullptr));
 
     // connect to the board
-    usb_retry_connect();
-
-    threads.push_back(std::thread(can_send_thread));
-    threads.push_back(std::thread(can_recv_thread));
-    threads.push_back(std::thread(hardware_control_thread));
-    threads.push_back(std::thread(pigeon_thread));
+    if (usb_retry_connect()) {
+      threads.push_back(std::thread(can_send_thread, getenv("FAKESEND") != nullptr));
+      threads.push_back(std::thread(can_recv_thread));
+      threads.push_back(std::thread(hardware_control_thread));
+      threads.push_back(std::thread(pigeon_thread));
+    }
 
     for (auto &t : threads) t.join();
 
     delete panda;
-    panda = NULL;
+    panda = nullptr;
   }
 }

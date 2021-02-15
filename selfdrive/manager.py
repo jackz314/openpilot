@@ -19,7 +19,7 @@ from common.basedir import BASEDIR
 from common.spinner import Spinner
 from common.text_window import TextWindow
 import selfdrive.crash as crash
-from selfdrive.hardware import HARDWARE, EON, PC
+from selfdrive.hardware import HARDWARE, EON, PC, TICI
 from selfdrive.hardware.eon.apk import update_apks, pm_apply_packages, start_offroad
 from selfdrive.swaglog import cloudlog, add_logentries_handler
 from selfdrive.version import version, dirty
@@ -110,7 +110,7 @@ def build():
       r = scons.stderr.read().split(b'\n')
       compile_output += r
 
-      if retry:
+      if retry and (not dirty):
         if not os.getenv("CI"):
           print("scons build failed, cleaning in")
           for i in range(3, -1, -1):
@@ -143,6 +143,7 @@ if __name__ == "__main__" and not PREBUILT:
   build()
 
 import cereal.messaging as messaging
+from cereal import log
 
 from common.params import Params
 from selfdrive.registration import register
@@ -165,7 +166,6 @@ managed_processes = {
   "tombstoned": "selfdrive.tombstoned",
   "logcatd": ("selfdrive/logcatd", ["./logcatd"]),
   "proclogd": ("selfdrive/proclogd", ["./proclogd"]),
-  "boardd": ("selfdrive/boardd", ["./boardd"]),   # not used directly
   "pandad": "selfdrive.pandad",
   "ui": ("selfdrive/ui", ["./ui"]),
   "calibrationd": "selfdrive.locationd.calibrationd",
@@ -173,7 +173,6 @@ managed_processes = {
   "camerad": ("selfdrive/camerad", ["./camerad"]),
   "sensord": ("selfdrive/sensord", ["./sensord"]),
   "clocksd": ("selfdrive/clocksd", ["./clocksd"]),
-  "gpsd": ("selfdrive/sensord", ["./gpsd"]),
   "updated": "selfdrive.updated",
   "dmonitoringmodeld": ("selfdrive/modeld", ["./dmonitoringmodeld"]),
   "modeld": ("selfdrive/modeld", ["./modeld"]),
@@ -218,6 +217,10 @@ if EON:
     'sensord',
   ]
 
+if TICI:
+  managed_processes["timezoned"] = "selfdrive.timezoned"
+  persistent_processes += ['timezoned']
+
 car_started_processes = [
   'controlsd',
   'plannerd',
@@ -248,7 +251,6 @@ if not PC or WEBCAM:
 
 if EON:
   car_started_processes += [
-    'gpsd',
     'rtshield',
   ]
 else:
@@ -268,10 +270,6 @@ def register_managed_process(name, desc, car_started=False):
 def nativelauncher(pargs, cwd):
   # exec the process
   os.chdir(cwd)
-
-  # because when extracted from pex zips permissions get lost -_-
-  os.chmod(pargs[0], 0o700)
-
   os.execvp(pargs[0], pargs)
 
 def start_managed_process(name):
@@ -397,6 +395,8 @@ def send_managed_process_signal(name, sig):
 # ****************** run loop ******************
 
 def manager_init():
+  os.umask(0)  # Make sure we can create files with 777 permissions
+
   # Create folders needed for msgq
   try:
     os.mkdir("/dev/shm")
@@ -416,9 +416,10 @@ def manager_init():
   if not dirty:
     os.environ['CLEAN'] = '1'
 
-  cloudlog.bind_global(dongle_id=dongle_id, version=version, dirty=dirty, is_eon=True)
+  cloudlog.bind_global(dongle_id=dongle_id, version=version, dirty=dirty,
+                       device=HARDWARE.get_device_type())
   crash.bind_user(id=dongle_id)
-  crash.bind_extra(version=version, dirty=dirty, is_eon=True)
+  crash.bind_extra(version=version, dirty=dirty, device=HARDWARE.get_device_type())
 
   # ensure shared libraries are readable by apks
   if EON:
@@ -459,11 +460,12 @@ def manager_thread():
   logger_dead = False
   params = Params()
   thermal_sock = messaging.sub_sock('thermal')
+  pm = messaging.PubMaster(['managerState'])
 
   while 1:
     msg = messaging.recv_sock(thermal_sock, wait=True)
 
-    if msg.thermal.freeSpace < 0.05:
+    if msg.thermal.freeSpacePercent < 0.05:
       logger_dead = True
 
     if msg.thermal.started:
@@ -498,6 +500,20 @@ def manager_thread():
     running_list = ["%s%s\u001b[0m" % ("\u001b[32m" if running[p].is_alive() else "\u001b[31m", p) for p in running]
     cloudlog.debug(' '.join(running_list))
 
+    # send managerState
+    states = []
+    for p in managed_processes:
+      state = log.ManagerState.ProcessState.new_message()
+      state.name = p
+      if p in running:
+        state.running = running[p].is_alive()
+        state.pid = running[p].pid
+        state.exitCode = running[p].exitcode or 0
+      states.append(state)
+    msg = messaging.new_message('managerState')
+    msg.managerState.processes = states
+    pm.send('managerState', msg)
+
     # Exit main loop when uninstall is needed
     if params.get("DoUninstall", encoding='utf8') == "1":
       break
@@ -529,6 +545,7 @@ def main():
     ("IsLdwEnabled", "1"),
     ("LastUpdateTime", datetime.datetime.utcnow().isoformat().encode('utf8')),
     ("OpenpilotEnabledToggle", "1"),
+    ("VisionRadarToggle", "0"),
     ("LaneChangeEnabled", "1"),
     ("IsDriverViewEnabled", "0"),
   ]

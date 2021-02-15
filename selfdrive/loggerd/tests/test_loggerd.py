@@ -45,15 +45,23 @@ class TestLoggerd(unittest.TestCase):
         return path
     return None
 
+  def _get_log_fn(self, x):
+    for p in x.split(' '):
+      path = Path(p.strip())
+      if path.is_file():
+        return path
+    return None
+
   def _gen_bootlog(self):
     with Timeout(5):
       out = subprocess.check_output("./bootlog", cwd=os.path.join(BASEDIR, "selfdrive/loggerd"), encoding='utf-8')
 
+    log_fn = self._get_log_fn(out)
+
     # check existence
-    d = self._get_log_dir(out)
-    path = Path(os.path.join(d, "bootlog.bz2"))
-    assert path.is_file(), "failed to create bootlog file"
-    return path
+    assert log_fn is not None
+
+    return log_fn
 
   def _check_init_data(self, msgs):
     msg = msgs[0]
@@ -111,7 +119,7 @@ class TestLoggerd(unittest.TestCase):
       os.environ["LOGGERD_SEGMENT_LENGTH"] = str(length)
 
       manager.start_managed_process("loggerd")
-      time.sleep(num_segs * length)
+      time.sleep((num_segs + 1) * length)
       manager.kill_managed_process("loggerd")
 
       route_path = str(self._get_latest_log_dir()).rsplit("--", 1)[0]
@@ -131,11 +139,9 @@ class TestLoggerd(unittest.TestCase):
     lr = list(LogReader(str(bootlog_path)))
 
     # check length
-    assert len(lr) == 4 # boot + initData + 2x sentinel
-    
-    # check initData and sentinel
+    assert len(lr) == 2  # boot + initData
+
     self._check_init_data(lr)
-    self._check_sentinel(lr, True)
 
     # check msgs
     bootlog_msgs = [m for m in lr if m.which() == 'boot']

@@ -34,19 +34,19 @@ int set_core_affinity(int core);
 
 namespace util {
 
-inline bool starts_with(std::string s, std::string prefix) {
+inline bool starts_with(const std::string &s, const std::string &prefix) {
   return s.compare(0, prefix.size(), prefix) == 0;
 }
 
-template<typename ... Args>
-inline std::string string_format( const std::string& format, Args ... args ) {
-    size_t size = snprintf( nullptr, 0, format.c_str(), args ... ) + 1;
-    std::unique_ptr<char[]> buf( new char[ size ] );
-    snprintf( buf.get(), size, format.c_str(), args ... );
-    return std::string( buf.get(), buf.get() + size - 1 );
+template <typename... Args>
+inline std::string string_format(const std::string& format, Args... args) {
+  size_t size = snprintf(nullptr, 0, format.c_str(), args...) + 1;
+  std::unique_ptr<char[]> buf(new char[size]);
+  snprintf(buf.get(), size, format.c_str(), args...);
+  return std::string(buf.get(), buf.get() + size - 1);
 }
 
-inline std::string read_file(std::string fn) {
+inline std::string read_file(const std::string &fn) {
   std::ifstream t(fn);
   std::stringstream buffer;
   buffer << t.rdbuf();
@@ -74,7 +74,7 @@ inline std::string dir_name(std::string const & path) {
   return path.substr(0, pos);
 }
 
-inline std::string readlink(std::string path) {
+inline std::string readlink(const std::string &path) {
   char buff[4096];
   ssize_t len = ::readlink(path.c_str(), buff, sizeof(buff)-1);
   if (len != -1) {

@@ -66,6 +66,7 @@ if arch == "aarch64" or arch == "larch64":
   ]
 
   libpath = [
+    "/usr/local/lib",
     "/usr/lib",
     "/system/vendor/lib64",
     "/system/comma/usr/lib",
@@ -174,6 +175,7 @@ env = Environment(
     "#phonelibs/linux/include",
     "#phonelibs/snpe/include",
     "#phonelibs/nanovg",
+    "#phonelibs/qrcode",
     "#selfdrive/boardd",
     "#selfdrive/common",
     "#selfdrive/camerad",
@@ -264,7 +266,7 @@ qt_env = None
 if arch in ["x86_64", "Darwin", "larch64"]:
   qt_env = env.Clone()
 
-  qt_modules = ["Widgets", "Gui", "Core", "DBus", "Multimedia", "Network"]
+  qt_modules = ["Widgets", "Gui", "Core", "DBus", "Multimedia", "Network", "Concurrent", "WebEngine", "WebEngineWidgets"]
 
   qt_libs = []
   if arch == "Darwin":

@@ -206,7 +206,7 @@ routes = {
     'enableCamera': True,
   },
   "b2a38c712dcf90bd|2020-05-18--18-12-48": {
-    'carFingerprint': HYUNDAI.SONATA_2019,
+    'carFingerprint': HYUNDAI.SONATA_LF,
     'enableCamera': True,
   },
   "5875672fc1d4bf57|2020-07-23--21-33-28": {
@@ -433,6 +433,10 @@ routes = {
     'carFingerprint': VOLKSWAGEN.GOLF,
     'enableCamera': True,
   },
+  "07667b885add75fd|2021-01-23--19-48-42": {
+    'carFingerprint': VOLKSWAGEN.AUDI_A3,
+    'enableCamera': True,
+  },
   "3c8f0c502e119c1c|2020-06-30--12-58-02": {
     'carFingerprint': SUBARU.ASCENT,
     'enableCamera': True,
@@ -471,6 +475,10 @@ routes = {
   },
   "5b7c365c50084530|2020-03-25--22-10-13": {
     'carFingerprint': NISSAN.LEAF,
+    'enableCamera': True,
+  },
+  "22c3dcce2dd627eb|2020-12-30--16-38-48": {
+    'carFingerprint': NISSAN.LEAF_IC,
     'enableCamera': True,
   },
   "059ab9162e23198e|2020-05-30--09-41-01": {
@@ -576,7 +584,7 @@ if __name__ == "__main__":
     # Start unlogger
     print("Start unlogger")
     unlogger_cmd = [os.path.join(BASEDIR, 'tools/replay/unlogger.py'), route, '/tmp']
-    disable_socks = 'frame,encodeIdx,plan,pathPlan,liveLongitudinalMpc,radarState,controlsState,liveTracks,liveMpc,sendcan,carState,carControl,carEvents,carParams'
+    disable_socks = 'frame,encodeIdx,plan,lateralPlan,liveLongitudinalMpc,radarState,controlsState,liveTracks,liveMpc,sendcan,carState,carControl,carEvents,carParams'
     unlogger = subprocess.Popen(unlogger_cmd + ['--disable', disable_socks, '--no-interactive'], preexec_fn=os.setsid)  # pylint: disable=subprocess-popen-preexec-fn
 
     print("Check sockets")
@@ -585,7 +593,7 @@ if __name__ == "__main__":
     if (route not in passive_routes) and (route not in forced_dashcam_routes) and has_camera:
       extra_socks.append("sendcan")
     if route not in passive_routes:
-      extra_socks.append("pathPlan")
+      extra_socks.append("lateralPlan")
 
     recvd_socks = wait_for_sockets(tested_socks + extra_socks, timeout=30)
     failures = [s for s in tested_socks + extra_socks if s not in recvd_socks]

@@ -106,7 +106,7 @@ Supported Cars
 | Toyota    | C-HR Hybrid 2017-19           | All               | Stock            | 0mph               | 0mph              |
 | Toyota    | Corolla 2017-19               | All               | Stock<sup>3</sup>| 20mph<sup>1</sup>  | 0mph              |
 | Toyota    | Corolla 2020-21               | All               | openpilot        | 0mph               | 0mph              |
-| Toyota    | Corolla Hatchback 2019-20     | All               | openpilot        | 0mph               | 0mph              |
+| Toyota    | Corolla Hatchback 2019-21     | All               | openpilot        | 0mph               | 0mph              |
 | Toyota    | Corolla Hybrid 2020-21        | All               | openpilot        | 0mph               | 0mph              |
 | Toyota    | Highlander 2017-19            | All               | Stock<sup>3</sup>| 0mph               | 0mph              |
 | Toyota    | Highlander 2020-21            | All               | openpilot        | 0mph               | 0mph              |
@@ -132,6 +132,7 @@ Community Maintained Cars and Features
 
 | Make      | Model (US Market Reference)   | Supported Package | ACC              | No ACC accel below | No ALC below |
 | ----------| ------------------------------| ------------------| -----------------| -------------------| -------------|
+| Audi      | A3 2015                       | Driver Assistance | Stock            | 0mph               | 0mph         |
 | Buick     | Regal 2018<sup>1</sup>        | Adaptive Cruise   | openpilot        | 0mph               | 7mph         |
 | Cadillac  | ATS 2018<sup>1</sup>          | Adaptive Cruise   | openpilot        | 0mph               | 7mph         |
 | Chevrolet | Malibu 2017<sup>1</sup>       | Adaptive Cruise   | openpilot        | 0mph               | 7mph         |
@@ -152,7 +153,7 @@ Community Maintained Cars and Features
 | Hyundai   | Kona 2020                     | SCC + LKAS        | Stock            | 0mph               | 0mph         |
 | Hyundai   | Kona EV 2019                  | SCC + LKAS        | Stock            | 0mph               | 0mph         |
 | Hyundai   | Santa Fe 2019-20              | All               | Stock            | 0mph               | 0mph         |
-| Hyundai   | Sonata 2019                   | SCC + LKAS        | Stock            | 0mph               | 0mph         |
+| Hyundai   | Sonata 2018-2019              | SCC + LKAS        | Stock            | 0mph               | 0mph         |
 | Hyundai   | Veloster 2019                 | SCC + LKAS        | Stock            | 5mph               | 0mph         |
 | Jeep      | Grand Cherokee 2016-18        | Adaptive Cruise   | Stock            | 0mph               | 9mph         |
 | Jeep      | Grand Cherokee 2019-20        | Adaptive Cruise   | Stock            | 0mph               | 39mph        |
@@ -337,8 +338,6 @@ Directory Structure
         ├── sensord         # IMU / GPS interface code
         ├── test            # Unit tests, system tests and a car simulator
         └── ui              # The UI
-
-To understand how the services interact, see `cereal/service_list.yaml`.
 
 Licensing
 ------
