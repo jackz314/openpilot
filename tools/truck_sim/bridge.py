@@ -122,17 +122,18 @@ import os
 car = capnp.load(os.path.join("../../cereal", "car.capnp"))
 
 def health_function():
-    pm = messaging.PubMaster(['health'])
+    pm = messaging.PubMaster(['pandaState'])
     while 1:
-        dat = messaging.new_message('health')
+        dat = messaging.new_message('pandaState')
         dat.valid = True
-        dat.health = {
-            'ignitionLine': True,
-            'pandaType': "blackPanda",
-            'controlsAllowed': True,
-            'safetyModel': car.CarParams.SafetyModel.hondaNidec,
+        dat.pandaState = {
+        'ignitionLine': True,
+        'pandaType': "blackPanda",
+        'controlsAllowed': True,
+        'safetyModel': 'hondaNidec'
+        # 'safetyModel': car.CarParams.SafetyModel.hondaNidec,
         }
-        pm.send('health', dat)
+        pm.send('pandaState', dat)
         time.sleep(0.5)
 
 from watchdog.observers import Observer
@@ -320,7 +321,7 @@ def go(q):
             sm.update(0)
             throttle_op = sm['carControl'].actuators.gas  # [0,1]
             brake_op = sm['carControl'].actuators.brake  # [0,1]
-            steer_op = sm['controlsState'].angleSteersDes  # degrees [-180,180]
+            steer_op = sm['controlsState'].steeringAngleDesiredDeg  # degrees [-180,180]
 
             throttle_out = throttle_op
             steer_out = steer_op
@@ -421,7 +422,10 @@ if __name__ == "__main__":
     params.delete("Offroad_ConnectivityNeeded")
     # params.put("HasAcceptedTerms", '1')
     # uncomment to skip calibration
-    # params.put("CalibrationParams", '{"calib_radians": [0,0,0], "valid_blocks": 20}')
+    # msg = messaging.new_message('liveCalibration')
+    # msg.liveCalibration.validBlocks = 20
+    # msg.liveCalibration.rpyCalib = [0.0, 0.0, 0.0]
+    # params.put("CalibrationParams", msg.to_bytes())
 
     from multiprocessing import Process, Queue
 

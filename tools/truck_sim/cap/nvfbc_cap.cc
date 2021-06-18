@@ -38,7 +38,7 @@
 // #include "cuda.h"
 #include "inc/cuda_drvapi_dynlink_cuda.h"
 
-#include "messaging.hpp"
+#include "cereal/messaging/messaging.h"
 
 #define LIB_NVFBC_NAME "libnvidia-fbc.so.1"
 #define LIB_CUDA_NAME  "libcuda.so.1"
@@ -151,7 +151,7 @@ inline void send_frame(const unsigned char *frame, const uint32_t frameId, const
     // FILE * fd = fopen("myfile.bin", "wb");
     // fwrite(frame, size, 1, fd);
     MessageBuilder msg;
-    auto framed = msg.initEvent().initFrame();
+    auto framed = msg.initEvent().initRoadCameraState();
     framed.setFrameId(frameId);
     framed.setImage(kj::arrayPtr((const uint8_t *)frame, size));
     framed.setTransform({
@@ -160,6 +160,7 @@ inline void send_frame(const unsigned char *frame, const uint32_t frameId, const
         0.0, 0.0, 1.0
     });
     auto bytes = msg.toBytes();
+    
     pubSocket->send((char *)bytes.begin(), bytes.size());
 }
 
@@ -356,7 +357,7 @@ int main(int argc, char *argv[])
     }
 
     pubSocket = PubSocket::create();
-    pubSocket->connect(Context::create(), "frame");
+    pubSocket->connect(Context::create(), "roadCameraState");
 
     // struct timespec delay = {0, 50*1000000};
     /*

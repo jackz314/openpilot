@@ -1,5 +1,5 @@
 #pragma once
-const int  TRAJECTORY_SIZE = 33;
+#define TRAJECTORY_SIZE 33 // avoid variable length array folded to constant array as an extension
 const float MIN_DRAW_DISTANCE = 10.0;
 const float MAX_DRAW_DISTANCE = 100.0;
 

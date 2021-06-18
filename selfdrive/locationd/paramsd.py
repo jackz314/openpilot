@@ -14,6 +14,8 @@ from selfdrive.locationd.models.car_kf import CarKalman, ObservationKind, States
 from selfdrive.locationd.models.constants import GENERATED_DIR
 from selfdrive.swaglog import cloudlog
 
+import os
+SIMULATION = "SIMULATION" in os.environ
 
 MAX_ANGLE_OFFSET_DELTA = 20 * DT_MDL  # Max 20 deg/s
 
@@ -156,12 +158,15 @@ def main(sm=None, pm=None):
       msg.liveParameters.stiffnessFactor = float(x[States.STIFFNESS])
       msg.liveParameters.angleOffsetAverageDeg = angle_offset_average
       msg.liveParameters.angleOffsetDeg = angle_offset
-      msg.liveParameters.valid = all((
-        abs(msg.liveParameters.angleOffsetAverageDeg) < 10.0,
-        abs(msg.liveParameters.angleOffsetDeg) < 10.0,
-        0.2 <= msg.liveParameters.stiffnessFactor <= 5.0,
-        min_sr <= msg.liveParameters.steerRatio <= max_sr,
-      ))
+      if not SIMULATION:
+        msg.liveParameters.valid = all((
+          abs(msg.liveParameters.angleOffsetAverageDeg) < 10.0,
+          abs(msg.liveParameters.angleOffsetDeg) < 10.0,
+          0.2 <= msg.liveParameters.stiffnessFactor <= 5.0,
+          min_sr <= msg.liveParameters.steerRatio <= max_sr,
+        ))
+      else:
+        msg.liveParameters.valid = True
 
       if sm.frame % 1200 == 0:  # once a minute
         params = {
