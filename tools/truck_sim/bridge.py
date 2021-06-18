@@ -419,6 +419,7 @@ if __name__ == "__main__":
     params.clear_all()
     set_params_enabled()
     params.delete("Offroad_ConnectivityNeeded")
+    # params.put("HasAcceptedTerms", '1')
     # uncomment to skip calibration
     # params.put("CalibrationParams", '{"calib_radians": [0,0,0], "valid_blocks": 20}')
 
