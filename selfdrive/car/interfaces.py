@@ -13,7 +13,10 @@ from selfdrive.controls.lib.vehicle_model import VehicleModel
 
 GearShifter = car.CarState.GearShifter
 EventName = car.CarEvent.EventName
-MAX_CTRL_SPEED = (V_CRUISE_MAX + 4) * CV.KPH_TO_MS  # 144 + 4 = 92 mph
+
+# WARNING: this value was determined based on the model's training distribution,
+#          model predictions above this speed can be unpredictable
+MAX_CTRL_SPEED = (V_CRUISE_MAX + 4) * CV.KPH_TO_MS  # 135 + 4 = 86 mph
 
 # generic car and radar interfaces
 
@@ -73,7 +76,7 @@ class CarInterfaceBase():
     ret.minSpeedCan = 0.3
     ret.stoppingBrakeRate = 0.2 # brake_travel/s while trying to stop
     ret.startingBrakeRate = 0.8 # brake_travel/s while releasing on restart
-    ret.stoppingControl = False
+    ret.stoppingControl = True
     ret.longitudinalTuning.deadzoneBP = [0.]
     ret.longitudinalTuning.deadzoneV = [0.]
     ret.longitudinalTuning.kpBP = [0.]
@@ -119,7 +122,10 @@ class CarInterfaceBase():
     if cs_out.steerError:
       events.add(EventName.steerUnavailable)
     elif cs_out.steerWarning:
-      events.add(EventName.steerTempUnavailable)
+      if cs_out.steeringPressed:
+        events.add(EventName.steerTempUnavailableUserOverride)
+      else:
+        events.add(EventName.steerTempUnavailable)
 
     # Disable on rising edge of gas or brake. Also disable on brake when speed > 0.
     # Optionally allow to press gas at zero speed to resume.

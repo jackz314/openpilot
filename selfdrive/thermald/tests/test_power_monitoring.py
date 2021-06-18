@@ -21,10 +21,10 @@ with patch("common.realtime.sec_since_boot", new=mock_sec_since_boot):
                                                     CAR_CHARGING_RATE_W, VBATT_PAUSE_CHARGING
 
 TEST_DURATION_S = 50
-ALL_PANDA_TYPES = [(hw_type,) for hw_type in [log.HealthData.PandaType.whitePanda,
-                                              log.HealthData.PandaType.greyPanda,
-                                              log.HealthData.PandaType.blackPanda,
-                                              log.HealthData.PandaType.uno]]
+ALL_PANDA_TYPES = [(hw_type,) for hw_type in [log.PandaState.PandaType.whitePanda,
+                                              log.PandaState.PandaType.greyPanda,
+                                              log.PandaState.PandaType.blackPanda,
+                                              log.PandaState.PandaType.uno]]
 
 def pm_patch(name, value, constant=False):
   if constant:
@@ -37,16 +37,17 @@ class TestPowerMonitoring(unittest.TestCase):
     params.delete("CarBatteryCapacity")
     params.delete("DisablePowerDown")
 
-  def mock_health(self, ignition, hw_type, car_voltage=12):
-    health = messaging.new_message('health')
-    health.health.pandaType = hw_type
-    health.health.voltage = car_voltage * 1e3
-    health.health.ignitionLine = ignition
-    health.health.ignitionCan = False
-    return health
+  def mock_pandaState(self, ignition, hw_type, car_voltage=12, harness_status=log.PandaState.HarnessStatus.normal):
+    pandaState = messaging.new_message('pandaState')
+    pandaState.pandaState.pandaType = hw_type
+    pandaState.pandaState.voltage = car_voltage * 1e3
+    pandaState.pandaState.ignitionLine = ignition
+    pandaState.pandaState.ignitionCan = False
+    pandaState.pandaState.harnessStatus = harness_status
+    return pandaState
 
-  # Test to see that it doesn't do anything when health is None
-  def test_health_present(self):
+  # Test to see that it doesn't do anything when pandaState is None
+  def test_pandaState_present(self):
     pm = PowerMonitoring()
     for _ in range(10):
       pm.calculate(None)
@@ -58,7 +59,7 @@ class TestPowerMonitoring(unittest.TestCase):
   def test_offroad_ignition(self, hw_type):
     pm = PowerMonitoring()
     for _ in range(10):
-      pm.calculate(self.mock_health(True, hw_type))
+      pm.calculate(self.mock_pandaState(True, hw_type))
     self.assertEqual(pm.get_power_used(), 0)
 
   # Test to see that it integrates with discharging battery
@@ -70,7 +71,7 @@ class TestPowerMonitoring(unittest.TestCase):
     pm_patch("HARDWARE.get_battery_status", "Discharging"), pm_patch("HARDWARE.get_current_power_draw", None):
       pm = PowerMonitoring()
       for _ in range(TEST_DURATION_S + 1):
-        pm.calculate(self.mock_health(False, hw_type))
+        pm.calculate(self.mock_pandaState(False, hw_type))
       expected_power_usage = ((TEST_DURATION_S/3600) * (BATT_VOLTAGE * BATT_CURRENT) * 1e6)
       self.assertLess(abs(pm.get_power_used() - expected_power_usage), 10)
 
@@ -84,7 +85,7 @@ class TestPowerMonitoring(unittest.TestCase):
       pm = PowerMonitoring()
       pm.car_battery_capacity_uWh = 0
       for _ in range(TEST_DURATION_S + 1):
-        pm.calculate(self.mock_health(True, hw_type))
+        pm.calculate(self.mock_pandaState(True, hw_type))
       expected_capacity = ((TEST_DURATION_S/3600) * CAR_CHARGING_RATE_W * 1e6)
       self.assertLess(abs(pm.get_car_battery_capacity() - expected_capacity), 10)
 
@@ -98,7 +99,7 @@ class TestPowerMonitoring(unittest.TestCase):
       pm = PowerMonitoring()
       pm.car_battery_capacity_uWh = CAR_BATTERY_CAPACITY_uWh - 1000
       for _ in range(TEST_DURATION_S + 1):
-        pm.calculate(self.mock_health(True, hw_type))
+        pm.calculate(self.mock_pandaState(True, hw_type))
       estimated_capacity = CAR_BATTERY_CAPACITY_uWh + (CAR_CHARGING_RATE_W / 3600 * 1e6)
       self.assertLess(abs(pm.get_car_battery_capacity() - estimated_capacity), 10)
 
@@ -112,7 +113,7 @@ class TestPowerMonitoring(unittest.TestCase):
       pm = PowerMonitoring()
       pm.car_battery_capacity_uWh = CAR_BATTERY_CAPACITY_uWh
       for _ in range(TEST_DURATION_S + 1):
-        pm.calculate(self.mock_health(False, hw_type))
+        pm.calculate(self.mock_pandaState(False, hw_type))
       expected_capacity = CAR_BATTERY_CAPACITY_uWh - ((TEST_DURATION_S/3600) * (BATT_VOLTAGE * BATT_CURRENT) * 1e6)
       self.assertLess(abs(pm.get_car_battery_capacity() - expected_capacity), 10)
 
@@ -126,7 +127,7 @@ class TestPowerMonitoring(unittest.TestCase):
       pm = PowerMonitoring()
       pm.car_battery_capacity_uWh = 1000
       for _ in range(TEST_DURATION_S + 1):
-        pm.calculate(self.mock_health(False, hw_type))
+        pm.calculate(self.mock_pandaState(False, hw_type))
       estimated_capacity = 0 - ((1/3600) * (BATT_VOLTAGE * BATT_CURRENT) * 1e6)
       self.assertLess(abs(pm.get_car_battery_capacity() - estimated_capacity), 10)
 
@@ -143,12 +144,12 @@ class TestPowerMonitoring(unittest.TestCase):
       pm = PowerMonitoring()
       pm.car_battery_capacity_uWh = CAR_BATTERY_CAPACITY_uWh
       start_time = ssb
-      health = self.mock_health(False, hw_type)
+      pandaState = self.mock_pandaState(False, hw_type)
       while ssb <= start_time + MOCKED_MAX_OFFROAD_TIME:
-        pm.calculate(health)
+        pm.calculate(pandaState)
         if (ssb - start_time) % 1000 == 0 and ssb < start_time + MOCKED_MAX_OFFROAD_TIME:
-          self.assertFalse(pm.should_disable_charging(health, start_time))
-      self.assertTrue(pm.should_disable_charging(health, start_time))
+          self.assertFalse(pm.should_disable_charging(pandaState, start_time))
+      self.assertTrue(pm.should_disable_charging(pandaState, start_time))
 
   # Test to check policy of stopping charging when the car voltage is too low
   @parameterized.expand(ALL_PANDA_TYPES)
@@ -161,12 +162,12 @@ class TestPowerMonitoring(unittest.TestCase):
     pm_patch("HARDWARE.get_battery_status", "Discharging"), pm_patch("HARDWARE.get_current_power_draw", None):
       pm = PowerMonitoring()
       pm.car_battery_capacity_uWh = CAR_BATTERY_CAPACITY_uWh
-      health = self.mock_health(False, hw_type, car_voltage=(VBATT_PAUSE_CHARGING - 1))
+      pandaState = self.mock_pandaState(False, hw_type, car_voltage=(VBATT_PAUSE_CHARGING - 1))
       for i in range(TEST_TIME):
-        pm.calculate(health)
+        pm.calculate(pandaState)
         if i % 10 == 0:
-          self.assertEqual(pm.should_disable_charging(health, ssb), (pm.car_voltage_mV < VBATT_PAUSE_CHARGING*1e3))
-      self.assertTrue(pm.should_disable_charging(health, ssb))
+          self.assertEqual(pm.should_disable_charging(pandaState, ssb), (pm.car_voltage_mV < VBATT_PAUSE_CHARGING*1e3))
+      self.assertTrue(pm.should_disable_charging(pandaState, ssb))
 
   # Test to check policy of not stopping charging when DisablePowerDown is set
   def test_disable_power_down(self):
@@ -174,17 +175,17 @@ class TestPowerMonitoring(unittest.TestCase):
     BATT_VOLTAGE = 4
     BATT_CURRENT = 0 # To stop shutting down for other reasons
     TEST_TIME = 100
-    params.put("DisablePowerDown", b"1")
+    params.put_bool("DisablePowerDown", True)
     with pm_patch("HARDWARE.get_battery_voltage", BATT_VOLTAGE * 1e6), pm_patch("HARDWARE.get_battery_current", BATT_CURRENT * 1e6), \
     pm_patch("HARDWARE.get_battery_status", "Discharging"), pm_patch("HARDWARE.get_current_power_draw", None):
       pm = PowerMonitoring()
       pm.car_battery_capacity_uWh = CAR_BATTERY_CAPACITY_uWh
-      health = self.mock_health(False, log.HealthData.PandaType.uno, car_voltage=(VBATT_PAUSE_CHARGING - 1))
+      pandaState = self.mock_pandaState(False, log.PandaState.PandaType.uno, car_voltage=(VBATT_PAUSE_CHARGING - 1))
       for i in range(TEST_TIME):
-        pm.calculate(health)
+        pm.calculate(pandaState)
         if i % 10 == 0:
-          self.assertFalse(pm.should_disable_charging(health, ssb))
-      self.assertFalse(pm.should_disable_charging(health, ssb))
+          self.assertFalse(pm.should_disable_charging(pandaState, ssb))
+      self.assertFalse(pm.should_disable_charging(pandaState, ssb))
 
   # Test to check policy of not stopping charging when ignition
   def test_ignition(self):
@@ -196,12 +197,30 @@ class TestPowerMonitoring(unittest.TestCase):
     pm_patch("HARDWARE.get_battery_status", "Discharging"), pm_patch("HARDWARE.get_current_power_draw", None):
       pm = PowerMonitoring()
       pm.car_battery_capacity_uWh = CAR_BATTERY_CAPACITY_uWh
-      health = self.mock_health(True, log.HealthData.PandaType.uno, car_voltage=(VBATT_PAUSE_CHARGING - 1))
+      pandaState = self.mock_pandaState(True, log.PandaState.PandaType.uno, car_voltage=(VBATT_PAUSE_CHARGING - 1))
       for i in range(TEST_TIME):
-        pm.calculate(health)
+        pm.calculate(pandaState)
         if i % 10 == 0:
-          self.assertFalse(pm.should_disable_charging(health, ssb))
-      self.assertFalse(pm.should_disable_charging(health, ssb))
+          self.assertFalse(pm.should_disable_charging(pandaState, ssb))
+      self.assertFalse(pm.should_disable_charging(pandaState, ssb))
+
+  # Test to check policy of not stopping charging when harness is not connected
+  def test_harness_connection(self):
+    global ssb
+    BATT_VOLTAGE = 4
+    BATT_CURRENT = 0 # To stop shutting down for other reasons
+    TEST_TIME = 100
+    with pm_patch("HARDWARE.get_battery_voltage", BATT_VOLTAGE * 1e6), pm_patch("HARDWARE.get_battery_current", BATT_CURRENT * 1e6), \
+    pm_patch("HARDWARE.get_battery_status", "Discharging"), pm_patch("HARDWARE.get_current_power_draw", None):
+      pm = PowerMonitoring()
+      pm.car_battery_capacity_uWh = CAR_BATTERY_CAPACITY_uWh
+      pandaState = self.mock_pandaState(False, log.PandaState.PandaType.uno, car_voltage=(VBATT_PAUSE_CHARGING - 1),
+        harness_status=log.PandaState.HarnessStatus.notConnected)
+      for i in range(TEST_TIME):
+        pm.calculate(pandaState)
+        if i % 10 == 0:
+          self.assertFalse(pm.should_disable_charging(pandaState, ssb))
+      self.assertFalse(pm.should_disable_charging(pandaState, ssb))
 
 if __name__ == "__main__":
   unittest.main()

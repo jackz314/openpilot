@@ -9,15 +9,16 @@ import cv2  # pylint: disable=import-error
 import numpy as np
 import pygame  # pylint: disable=import-error
 
+import cereal.messaging as messaging
 from common.basedir import BASEDIR
 from selfdrive.config import UIParams as UP
-import cereal.messaging as messaging
-from tools.replay.lib.ui_helpers import (_BB_TO_FULL_FRAME, _FULL_FRAME_SIZE, _INTRINSICS,
-                                         BLACK,  GREEN, YELLOW, RED,
+from tools.replay.lib.ui_helpers import (_BB_TO_FULL_FRAME, _FULL_FRAME_SIZE,
+                                         _INTRINSICS, BLACK, GREEN,
+                                         YELLOW, Calibration,
                                          get_blank_lid_overlay, init_plots,
-                                         maybe_update_radar_points, plot_model,
-                                         pygame_modules_have_loaded,
-                                         Calibration)
+                                         maybe_update_radar_points, plot_lead,
+                                         plot_model,
+                                         pygame_modules_have_loaded)
 
 os.environ['BASEDIR'] = BASEDIR
 
@@ -53,9 +54,9 @@ def ui_thread(addr, frame_address):
   camera_surface = pygame.surface.Surface((640, 480), 0, 24).convert()
   top_down_surface = pygame.surface.Surface((UP.lidar_x, UP.lidar_y), 0, 8)
 
-  frame = messaging.sub_sock('frame', addr=addr, conflate=True)
+  frame = messaging.sub_sock('roadCameraState', addr=addr, conflate=True)
   sm = messaging.SubMaster(['carState', 'longitudinalPlan', 'carControl', 'radarState', 'liveCalibration', 'controlsState',
-                            'liveTracks', 'modelV2', 'liveMpc', 'liveParameters', 'lateralPlan', 'frame'], addr=addr)
+                            'liveTracks', 'modelV2', 'liveMpc', 'liveParameters', 'lateralPlan', 'roadCameraState'], addr=addr)
 
   img = np.zeros((480, 640, 3), dtype='uint8')
   imgff = None
@@ -109,7 +110,7 @@ def ui_thread(addr, frame_address):
 
     # ***** frame *****
     fpkt = messaging.recv_one(frame)
-    rgb_img_raw = fpkt.frame.image
+    rgb_img_raw = fpkt.roadCameraState.image
 
     num_px = len(rgb_img_raw) // 3
     if rgb_img_raw and num_px in _FULL_FRAME_SIZE.keys():
@@ -134,15 +135,15 @@ def ui_thread(addr, frame_address):
 
     w = sm['controlsState'].lateralControlState.which()
     if w == 'lqrState':
-      angle_steers_k = sm['controlsState'].lateralControlState.lqrState.steerAngle
+      angle_steers_k = sm['controlsState'].lateralControlState.lqrState.steeringAngleDeg
     elif w == 'indiState':
-      angle_steers_k = sm['controlsState'].lateralControlState.indiState.steerAngle
+      angle_steers_k = sm['controlsState'].lateralControlState.indiState.steeringAngleDeg
     else:
       angle_steers_k = np.inf
 
     plot_arr[:-1] = plot_arr[1:]
-    plot_arr[-1, name_to_arr_idx['angle_steers']] = sm['carState'].steeringAngle
-    plot_arr[-1, name_to_arr_idx['angle_steers_des']] = sm['carControl'].actuators.steerAngle
+    plot_arr[-1, name_to_arr_idx['angle_steers']] = sm['carState'].steeringAngleDeg
+    plot_arr[-1, name_to_arr_idx['angle_steers_des']] = sm['controlsState'].steeringAngleDesiredDeg
     plot_arr[-1, name_to_arr_idx['angle_steers_k']] = angle_steers_k
     plot_arr[-1, name_to_arr_idx['gas']] = sm['carState'].gas
     plot_arr[-1, name_to_arr_idx['computer_gas']] = sm['carControl'].actuators.gas
@@ -157,9 +158,11 @@ def ui_thread(addr, frame_address):
     plot_arr[-1, name_to_arr_idx['a_target']] = sm['longitudinalPlan'].aTarget
     plot_arr[-1, name_to_arr_idx['accel_override']] = sm['carControl'].cruiseControl.accelOverride
 
-    # ***** model ****
     if sm.rcv_frame['modelV2']:
       plot_model(sm['modelV2'], img, calibration, top_down)
+
+    if sm.rcv_frame['radarState']:
+      plot_lead(sm['radarState'], top_down)
 
     # draw all radar points
     maybe_update_radar_points(sm['liveTracks'], top_down[1])
@@ -190,13 +193,12 @@ def ui_thread(addr, frame_address):
 
     lines = [
       info_font.render("ENABLED", True, GREEN if sm['controlsState'].enabled else BLACK),
-      info_font.render("BRAKE LIGHTS", True, RED if sm['carState'].brakeLights else BLACK),
       info_font.render("SPEED: " + str(round(sm['carState'].vEgo, 1)) + " m/s", True, YELLOW),
       info_font.render("LONG CONTROL STATE: " + str(sm['controlsState'].longControlState), True, YELLOW),
       info_font.render("LONG MPC SOURCE: " + str(sm['longitudinalPlan'].longitudinalPlanSource), True, YELLOW),
       None,
-      info_font.render("ANGLE OFFSET (AVG): " + str(round(sm['liveParameters'].angleOffsetAverage, 2)) + " deg", True, YELLOW),
-      info_font.render("ANGLE OFFSET (INSTANT): " + str(round(sm['liveParameters'].angleOffset, 2)) + " deg", True, YELLOW),
+      info_font.render("ANGLE OFFSET (AVG): " + str(round(sm['liveParameters'].angleOffsetAverageDeg, 2)) + " deg", True, YELLOW),
+      info_font.render("ANGLE OFFSET (INSTANT): " + str(round(sm['liveParameters'].angleOffsetDeg, 2)) + " deg", True, YELLOW),
       info_font.render("STIFFNESS: " + str(round(sm['liveParameters'].stiffnessFactor * 100., 2)) + " %", True, YELLOW),
       info_font.render("STEER RATIO: " + str(round(sm['liveParameters'].steerRatio, 2)), True, YELLOW)
     ]

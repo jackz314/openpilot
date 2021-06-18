@@ -1,10 +1,10 @@
 import random
 
 from cereal import log
-from selfdrive.hardware.base import HardwareBase
+from selfdrive.hardware.base import HardwareBase, ThermalConfig
 
-NetworkType = log.ThermalData.NetworkType
-NetworkStrength = log.ThermalData.NetworkStrength
+NetworkType = log.DeviceState.NetworkType
+NetworkStrength = log.DeviceState.NetworkStrength
 
 
 class Pc(HardwareBase):
@@ -31,6 +31,9 @@ class Pc(HardwareBase):
 
   def get_subscriber_info(self):
     return ""
+
+  def get_network_info(self):
+    return None
 
   def get_network_type(self):
     return NetworkType.wifi
@@ -70,3 +73,15 @@ class Pc(HardwareBase):
 
   def get_current_power_draw(self):
     return 0
+
+  def shutdown(self):
+    print("SHUTDOWN!")
+
+  def get_thermal_config(self):
+    return ThermalConfig(cpu=((None,), 1), gpu=((None,), 1), mem=(None, 1), bat=(None, 1), ambient=(None, 1))
+
+  def set_screen_brightness(self, percentage):
+    pass
+
+  def set_power_save(self, enabled):
+    pass

@@ -1,60 +1,64 @@
+#include "selfdrive/ui/qt/widgets/keyboard.h"
+
+#include <QButtonGroup>
 #include <QDebug>
-#include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QPushButton>
-#include <QButtonGroup>
-#include <QStackedLayout>
-
-#include "keyboard.hpp"
+#include <QVBoxLayout>
 
 const int DEFAULT_STRETCH = 1;
 const int SPACEBAR_STRETCH = 3;
 
-KeyboardLayout::KeyboardLayout(QWidget *parent, std::vector<QVector<QString>> layout) : QWidget(parent) {
-  QVBoxLayout* vlayout = new QVBoxLayout;
-  vlayout->setMargin(0);
-  vlayout->setSpacing(15);
+KeyboardLayout::KeyboardLayout(QWidget* parent, const std::vector<QVector<QString>>& layout) : QWidget(parent) {
+  QVBoxLayout* main_layout = new QVBoxLayout(this);
+  main_layout->setMargin(0);
+  main_layout->setSpacing(35);
 
   QButtonGroup* btn_group = new QButtonGroup(this);
   QObject::connect(btn_group, SIGNAL(buttonClicked(QAbstractButton*)), parent, SLOT(handleButton(QAbstractButton*)));
 
   for (const auto &s : layout) {
     QHBoxLayout *hlayout = new QHBoxLayout;
-    hlayout->setSpacing(30);
+    hlayout->setSpacing(25);
 
-    if (vlayout->count() == 1) {
+    if (main_layout->count() == 1) {
       hlayout->addSpacing(90);
     }
 
     for (const QString &p : s) {
       QPushButton* btn = new QPushButton(p);
-      btn->setFixedHeight(120);
+      btn->setFixedHeight(135);
       btn_group->addButton(btn);
       hlayout->addWidget(btn, p == QString("  ") ? SPACEBAR_STRETCH : DEFAULT_STRETCH);
     }
 
-    if (vlayout->count() == 1) {
+    if (main_layout->count() == 1) {
       hlayout->addSpacing(90);
     }
 
-    vlayout->addLayout(hlayout);
+    main_layout->addLayout(hlayout);
   }
 
   setStyleSheet(R"(
+    * {
+      outline: none;
+    }
     QPushButton {
       font-size: 65px;
       margin: 0px;
       padding: 0px;
-      border-radius: 7px;
+      border-radius: 30px;
       color: #dddddd;
       background-color: #444444;
     }
+    QPushButton:pressed {
+      background-color: #000000;
+    }
   )");
-  setLayout(vlayout);
 }
 
 Keyboard::Keyboard(QWidget *parent) : QFrame(parent) {
-  main_layout = new QStackedLayout;
+  main_layout = new QStackedLayout(this);
   main_layout->setMargin(0);
 
   // lowercase
@@ -93,7 +97,6 @@ Keyboard::Keyboard(QWidget *parent) : QFrame(parent) {
   };
   main_layout->addWidget(new KeyboardLayout(this, specials));
 
-  setLayout(main_layout);
   main_layout->setCurrentIndex(0);
 }
 

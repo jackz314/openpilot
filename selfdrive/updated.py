@@ -119,7 +119,7 @@ def set_params(new_version: bool, failed_count: int, exception: Optional[str]) -
       params.put("ReleaseNotes", r + b"\n")
     except Exception:
       params.put("ReleaseNotes", "")
-    params.put("UpdateAvailable", "1")
+    params.put_bool("UpdateAvailable", True)
 
 
 def setup_git_options(cwd: str) -> None:
@@ -164,7 +164,8 @@ def init_overlay() -> None:
 
   cloudlog.info("preparing new safe staging area")
 
-  Params().put("UpdateAvailable", "0")
+  params = Params()
+  params.put_bool("UpdateAvailable", False)
   set_consistent_flag(False)
   dismount_overlay()
   if os.path.isdir(STAGING_ROOT):
@@ -195,6 +196,10 @@ def init_overlay() -> None:
     run(["sudo", "chmod", "755", os.path.join(OVERLAY_METADATA, "work")])
   else:
     run(mount_cmd)
+
+  git_diff = run(["git", "diff"], OVERLAY_MERGED, low_priority=True)
+  params.put("GitDiff", git_diff)
+  cloudlog.info(f"git diff output:\n{git_diff}")
 
 
 def finalize_update() -> None:
@@ -227,9 +232,11 @@ def handle_agnos_update(wait_helper):
   set_consistent_flag(False)
 
   cloudlog.info(f"Beginning background installation for AGNOS {updated_version}")
+  set_offroad_alert("Offroad_NeosUpdate", True)
 
   manifest_path = os.path.join(OVERLAY_MERGED, "selfdrive/hardware/tici/agnos.json")
   flash_agnos_update(manifest_path, cloudlog)
+  set_offroad_alert("Offroad_NeosUpdate", False)
 
 
 def handle_neos_update(wait_helper: WaitTimeHelper) -> None:
@@ -325,12 +332,8 @@ def fetch_update(wait_helper: WaitTimeHelper) -> bool:
 def main():
   params = Params()
 
-  if params.get("DisableUpdates") == b"1":
+  if params.get_bool("DisableUpdates"):
     raise RuntimeError("updates are disabled by the DisableUpdates param")
-
-  # TODO: remove this after next release
-  if EON and "letv" not in open("/proc/cmdline").read():
-    raise RuntimeError("updates are disabled due to device deprecation")
 
   if EON and os.geteuid() != 0:
     raise RuntimeError("updated must be launched as root!")
@@ -367,7 +370,7 @@ def main():
 
     # Don't run updater while onroad or if the time's wrong
     time_wrong = datetime.datetime.utcnow().year < 2019
-    is_onroad = params.get("IsOffroad") != b"1"
+    is_onroad = not params.get_bool("IsOffroad")
     if is_onroad or time_wrong:
       wait_helper.sleep(30)
       cloudlog.info("not running updater, not offroad")

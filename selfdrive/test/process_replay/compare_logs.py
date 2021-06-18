@@ -4,6 +4,7 @@ import os
 import sys
 import numbers
 import dictdiffer
+from collections import Counter
 
 if "CI" in os.environ:
   def tqdm(x):
@@ -16,11 +17,11 @@ from tools.lib.logreader import LogReader
 EPSILON = sys.float_info.epsilon
 
 
-def save_log(dest, log_msgs):
-  dat = b""
-  for msg in tqdm(log_msgs):
-    dat += msg.as_builder().to_bytes()
-  dat = bz2.compress(dat)
+def save_log(dest, log_msgs, compress=True):
+  dat = b"".join([msg.as_builder().to_bytes() for msg in tqdm(log_msgs)])
+
+  if compress:
+    dat = bz2.compress(dat)
 
   with open(dest, "wb") as f:
    f.write(dat)
@@ -60,7 +61,9 @@ def compare_logs(log1, log2, ignore_fields=None, ignore_msgs=None, tolerance=Non
   log1, log2 = [list(filter(lambda m: m.which() not in ignore_msgs, log)) for log in (log1, log2)]
 
   if len(log1) != len(log2):
-    raise Exception(f"logs are not same length: {len(log1)} VS {len(log2)}")
+    cnt1 = Counter([m.which() for m in log1])
+    cnt2 = Counter([m.which() for m in log2])
+    raise Exception(f"logs are not same length: {len(log1)} VS {len(log2)}\n\t\t{cnt1}\n\t\t{cnt2}")
 
   diff = []
   for msg1, msg2 in tqdm(zip(log1, log2)):

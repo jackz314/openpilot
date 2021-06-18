@@ -21,6 +21,7 @@ from common.transformations.camera import eon_f_frame_size, tici_f_frame_size
 from tools.lib.kbhit import KBHit
 from tools.lib.logreader import MultiLogIterator
 from tools.lib.route import Route
+from tools.lib.framereader import rgb24toyuv420
 from tools.lib.route_framereader import RouteFrameReader
 
 # Commands.
@@ -29,7 +30,8 @@ SeekAbsoluteTime = namedtuple("SeekAbsoluteTime", ("secs",))
 SeekRelativeTime = namedtuple("SeekRelativeTime", ("secs",))
 TogglePause = namedtuple("TogglePause", ())
 StopAndQuit = namedtuple("StopAndQuit", ())
-VIPC_TYP = "vipc"
+VIPC_RGB = "rgb"
+VIPC_YUV = "yuv"
 
 
 class UnloggerWorker(object):
@@ -49,9 +51,9 @@ class UnloggerWorker(object):
     poller = zmq.Poller()
     poller.register(commands_socket, zmq.POLLIN)
 
-    # We can't publish frames without encodeIdx, so add when it's missing.
-    if "frame" in pub_types:
-      pub_types["encodeIdx"] = None
+    # We can't publish frames without roadEncodeIdx, so add when it's missing.
+    if "roadCameraState" in pub_types:
+      pub_types["roadEncodeIdx"] = None
 
     # gc.set_debug(gc.DEBUG_LEAK | gc.DEBUG_OBJECTS | gc.DEBUG_STATS | gc.DEBUG_SAVEALL |
     # gc.DEBUG_UNCOLLECTABLE)
@@ -86,11 +88,11 @@ class UnloggerWorker(object):
         continue
 
       # **** special case certain message types ****
-      if typ == "encodeIdx" and msg.encodeIdx.type == fullHEVC:
-        # this assumes the encodeIdx always comes before the frame
+      if typ == "roadEncodeIdx" and msg.roadEncodeIdx.type == fullHEVC:
+        # this assumes the roadEncodeIdx always comes before the frame
         self._frame_id_lookup[
-          msg.encodeIdx.frameId] = msg.encodeIdx.segmentNum, msg.encodeIdx.segmentId
-        #print "encode", msg.encodeIdx.frameId, len(self._readahead), route_time
+          msg.roadEncodeIdx.frameId] = msg.roadEncodeIdx.segmentNum, msg.roadEncodeIdx.segmentId
+        #print "encode", msg.roadEncodeIdx.frameId, len(self._readahead), route_time
       self._readahead.appendleft((typ, msg, route_time, cookie))
 
   def _send_logs(self, data_socket):
@@ -98,8 +100,8 @@ class UnloggerWorker(object):
       typ, msg, route_time, cookie = self._readahead.pop()
       smsg = msg.as_builder()
 
-      if typ == "frame":
-        frame_id = msg.frame.frameId
+      if typ == "roadCameraState":
+        frame_id = msg.roadCameraState.frameId
 
         # Frame exists, make sure we have a framereader.
         # load the frame readers as needed
@@ -114,14 +116,23 @@ class UnloggerWorker(object):
           print("FRAME(%d) LAG -- %.2f ms" % (frame_id, fr_time*1000.0))
 
         if img is not None:
+
+          extra = (smsg.roadCameraState.frameId, smsg.roadCameraState.timestampSof, smsg.roadCameraState.timestampEof)
+
+          # send YUV frame
+          if os.getenv("YUV") is not None:
+            img_yuv = rgb24toyuv420(img)
+            data_socket.send_pyobj((cookie, VIPC_YUV, msg.logMonoTime, route_time, extra), flags=zmq.SNDMORE)
+            data_socket.send(img_yuv.flatten().tobytes(), copy=False)
+
           img = img[:, :, ::-1]  # Convert RGB to BGR, which is what the camera outputs
           img = img.flatten()
           bts = img.tobytes()
 
-          smsg.frame.image = bts
+          smsg.roadCameraState.image = bts
 
-          extra = (smsg.frame.frameId, smsg.frame.timestampSof, smsg.frame.timestampEof)
-          data_socket.send_pyobj((cookie, VIPC_TYP, msg.logMonoTime, route_time, extra), flags=zmq.SNDMORE)
+          # send RGB frame
+          data_socket.send_pyobj((cookie, VIPC_RGB, msg.logMonoTime, route_time, extra), flags=zmq.SNDMORE)
           data_socket.send(bts, copy=False)
 
       data_socket.send_pyobj((cookie, typ, msg.logMonoTime, route_time), flags=zmq.SNDMORE)
@@ -135,7 +146,7 @@ class UnloggerWorker(object):
       self._lr = MultiLogIterator(route.log_paths(), wraparound=True)
       if self._frame_reader is not None:
         self._frame_reader.close()
-      if "frame" in pub_types or "encodeIdx" in pub_types:
+      if "roadCameraState" in pub_types or "roadEncodeIdx" in pub_types:
         # reset frames for a route
         self._frame_id_lookup = {}
         self._frame_reader = RouteFrameReader(
@@ -166,6 +177,7 @@ def _get_vipc_server(length):
 
   vipc_server = VisionIpcServer("camerad")
   vipc_server.create_buffers(VisionStreamType.VISION_STREAM_RGB_BACK, 4, True, w, h)
+  vipc_server.create_buffers(VisionStreamType.VISION_STREAM_YUV_BACK, 40, False, w, h)
   vipc_server.start_listener()
   return vipc_server
 
@@ -259,7 +271,7 @@ def unlogger_thread(command_address, forward_commands_address, data_address, run
         print("at", route_time)
         printed_at = route_time
 
-      if typ not in send_funcs and typ != 'vipc':
+      if typ not in send_funcs and typ not in [VIPC_RGB, VIPC_YUV]:
         if typ in address_mapping:
           # Remove so we don't keep printing warnings.
           address = address_mapping.pop(typ)
@@ -288,13 +300,15 @@ def unlogger_thread(command_address, forward_commands_address, data_address, run
 
       # Send message.
       try:
-        if typ == VIPC_TYP and (not no_visionipc):
-          if vipc_server is None:
-            vipc_server = _get_vipc_server(len(msg_bytes))
+        if typ in [VIPC_RGB, VIPC_YUV]:
+          if not no_visionipc:
+            if vipc_server is None:
+              vipc_server = _get_vipc_server(len(msg_bytes))
 
-          i, sof, eof = extra[0]
-          vipc_server.send(VisionStreamType.VISION_STREAM_RGB_BACK, msg_bytes, i, sof, eof)
-        if typ != VIPC_TYP:
+            i, sof, eof = extra[0]
+            stream = VisionStreamType.VISION_STREAM_RGB_BACK if typ == VIPC_RGB else VisionStreamType.VISION_STREAM_YUV_BACK
+            vipc_server.send(stream, msg_bytes, i, sof, eof)
+        else:
           send_funcs[typ](msg_bytes)
       except MultiplePublishersError:
         del send_funcs[typ]
@@ -313,8 +327,8 @@ def absolute_time_str(s, start_time):
 def _get_address_mapping(args):
   if args.min is not None:
     services_to_mock = [
-      'thermal', 'can', 'health', 'sensorEvents', 'gpsNMEA', 'frame', 'encodeIdx',
-      'model', 'features', 'liveLocation',
+      'deviceState', 'can', 'pandaState', 'sensorEvents', 'gpsNMEA', 'roadCameraState', 'roadEncodeIdx',
+      'modelV2', 'liveLocation',
     ]
   elif args.enabled is not None:
     services_to_mock = args.enabled

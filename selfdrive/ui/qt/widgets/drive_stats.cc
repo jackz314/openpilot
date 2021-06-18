@@ -1,117 +1,90 @@
-#include <cassert>
-#include <iostream>
+#include "selfdrive/ui/qt/widgets/drive_stats.h"
 
 #include <QDebug>
-#include <QFile>
-#include <QJsonDocument>
+#include <QGridLayout>
 #include <QJsonObject>
-#include <QLabel>
-#include <QNetworkRequest>
-#include <QStackedLayout>
-#include <QTimer>
 #include <QVBoxLayout>
 
-#include "api.hpp"
-#include "common/params.h"
-#include "common/util.h"
-#include "drive_stats.hpp"
-#include "home.hpp"
+#include "selfdrive/common/params.h"
+#include "selfdrive/ui/qt/request_repeater.h"
 
 const double MILE_TO_KM = 1.60934;
 
-#if defined(QCOM) || defined(QCOM2)
-const std::string private_key_path = "/persist/comma/id_rsa";
-#else
-const std::string private_key_path = util::getenv_default("HOME", "/.comma/persist/comma/id_rsa", "/persist/comma/id_rsa");
-#endif
+namespace {
 
-void clearLayouts(QLayout* layout) {
-  while (QLayoutItem* item = layout->takeAt(0)) {
-    if (QWidget* widget = item->widget()) {
-      widget->deleteLater();
-    }
-    if (QLayout* childLayout = item->layout()) {
-      clearLayouts(childLayout);
-    }
-    delete item;
-  }
+QLabel* numberLabel() {
+  QLabel* label = new QLabel("0");
+  label->setStyleSheet("font-size: 80px; font-weight: 600;");
+  return label;
 }
 
-QLayout* build_stat(QString name, int stat) {
-  QVBoxLayout* layout = new QVBoxLayout;
-
-  QLabel* metric = new QLabel(QString("%1").arg(stat));
-  metric->setStyleSheet(R"(
-    font-size: 80px;
-    font-weight: 600;
-  )");
-  layout->addWidget(metric, 0, Qt::AlignLeft);
-
+QLabel* unitLabel(const QString& name) {
   QLabel* label = new QLabel(name);
-  label->setStyleSheet(R"(
-    font-size: 45px;
-    font-weight: 500;
-  )");
-  layout->addWidget(label, 0, Qt::AlignLeft);
-
-  return layout;
+  label->setStyleSheet("font-size: 45px; font-weight: 500;");
+  return label;
 }
 
-void DriveStats::parseError(QString response) {
-  clearLayouts(vlayout);
-  vlayout->addWidget(new QLabel("No internet connection"));
+}  // namespace
+
+DriveStats::DriveStats(QWidget* parent) : QWidget(parent) {
+  metric_ = Params().getBool("IsMetric");
+
+  QGridLayout* main_layout = new QGridLayout(this);
+  main_layout->setMargin(0);
+
+  auto add_stats_layouts = [=](const QString &title, StatsLabels& labels) {
+    int row = main_layout->rowCount();
+    main_layout->addWidget(new QLabel(title), row++, 0, 1, 3);
+
+    main_layout->addWidget(labels.routes = numberLabel(), row, 0, Qt::AlignLeft);
+    main_layout->addWidget(labels.distance = numberLabel(), row, 1, Qt::AlignLeft);
+    main_layout->addWidget(labels.hours = numberLabel(), row, 2, Qt::AlignLeft);
+
+    main_layout->addWidget(unitLabel("DRIVES"), row + 1, 0, Qt::AlignLeft);
+    main_layout->addWidget(labels.distance_unit = unitLabel(getDistanceUnit()), row + 1, 1, Qt::AlignLeft);
+    main_layout->addWidget(unitLabel("HOURS"), row + 1, 2, Qt::AlignLeft);
+  };
+
+  add_stats_layouts("ALL TIME", all_);
+  add_stats_layouts("PAST WEEK", week_);
+
+  std::string dongle_id = Params().get("DongleId");
+  if (util::is_valid_dongle_id(dongle_id)) {
+    std::string url = "https://api.commadotai.com/v1.1/devices/" + dongle_id + "/stats";
+    RequestRepeater* repeater = new RequestRepeater(this, QString::fromStdString(url), "ApiCache_DriveStats", 30);
+    QObject::connect(repeater, &RequestRepeater::receivedResponse, this, &DriveStats::parseResponse);
+  }
+
+  setStyleSheet(R"(QLabel {font-size: 48px; font-weight: 500;})");
 }
 
-void DriveStats::parseResponse(QString response) {
-  response.chop(1);
-  clearLayouts(vlayout);
-  QJsonDocument doc = QJsonDocument::fromJson(response.toUtf8());
+void DriveStats::updateStats() {
+  auto update = [=](const QJsonObject& obj, StatsLabels& labels) {
+    labels.routes->setText(QString::number((int)obj["routes"].toDouble()));
+    labels.distance->setText(QString::number(int(obj["distance"].toDouble() * (metric_ ? MILE_TO_KM : 1))));
+    labels.distance_unit->setText(getDistanceUnit());
+    labels.hours->setText(QString::number((int)(obj["minutes"].toDouble() / 60)));
+  };
+
+  QJsonObject json = stats_.object();
+  update(json["all"].toObject(), all_);
+  update(json["week"].toObject(), week_);
+}
+
+void DriveStats::parseResponse(const QString& response) {
+  QJsonDocument doc = QJsonDocument::fromJson(response.trimmed().toUtf8());
   if (doc.isNull()) {
     qDebug() << "JSON Parse failed on getting past drives statistics";
     return;
   }
-
-  QString IsMetric = QString::fromStdString(Params().get("IsMetric"));
-  bool metric = (IsMetric == "1");
-
-  QJsonObject json = doc.object();
-  auto all = json["all"].toObject();
-  auto week = json["week"].toObject();
-
-  QGridLayout* gl = new QGridLayout();
-
-  int all_distance = all["distance"].toDouble() * (metric ? MILE_TO_KM : 1);
-  gl->addWidget(new QLabel("ALL TIME"), 0, 0, 1, 3);
-  gl->addLayout(build_stat("DRIVES", all["routes"].toDouble()), 1, 0, 3, 1);
-  gl->addLayout(build_stat(metric ? "KM" : "MILES", all_distance), 1, 1, 3, 1);
-  gl->addLayout(build_stat("HOURS", all["minutes"].toDouble() / 60), 1, 2, 3, 1);
-
-  int week_distance = week["distance"].toDouble() * (metric ? MILE_TO_KM : 1);
-  gl->addWidget(new QLabel("PAST WEEK"), 6, 0, 1, 3);
-  gl->addLayout(build_stat("DRIVES", week["routes"].toDouble()), 7, 0, 3, 1);
-  gl->addLayout(build_stat(metric ? "KM" : "MILES", week_distance), 7, 1, 3, 1);
-  gl->addLayout(build_stat("HOURS", week["minutes"].toDouble() / 60), 7, 2, 3, 1);
-
-  QWidget* q = new QWidget;
-  q->setLayout(gl);
-
-  vlayout->addWidget(q);
+  stats_ = doc;
+  updateStats();
 }
 
-DriveStats::DriveStats(QWidget* parent) : QWidget(parent) {
-  vlayout = new QVBoxLayout(this);
-  setLayout(vlayout);
-  setStyleSheet(R"(
-    QLabel {
-      font-size: 48px;
-      font-weight: 500;
-    }
-  )");
-
-  QString dongleId = QString::fromStdString(Params().get("DongleId"));
-  QString url = "https://api.commadotai.com/v1.1/devices/" + dongleId + "/stats";
-  RequestRepeater* repeater = new RequestRepeater(this, url, 13);
-  QObject::connect(repeater, SIGNAL(receivedResponse(QString)), this, SLOT(parseResponse(QString)));
-  QObject::connect(repeater, SIGNAL(failedResponse(QString)), this, SLOT(parseError(QString)));
-
+void DriveStats::showEvent(QShowEvent* event) {
+  bool metric = Params().getBool("IsMetric");
+  if (metric_ != metric) {
+    metric_ = metric;
+    updateStats();
+  }
 }
